@@ -7,13 +7,23 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
  */
 exports.main = async (event) => {
   const wxContext = cloud.getWXContext();
-  const openId = wxContext.OPENID;
+  let openId = wxContext.OPENID;
+  const debug = event && event.debugOpenId;
+  if (
+    debug &&
+    typeof debug === 'string' &&
+    /^dbg_[a-z0-9_]{1,24}$/i.test(debug) &&
+    wxContext.SOURCE === 'wx_devtools'
+  ) {
+    openId = debug;
+  }
   const db = cloud.database();
 
   const nickname = event.nickname;
   const persona = event.persona;
 
-  if (nickname || persona) {
+  // 伪身份不写 users 集合，避免污染正式用户数据
+  if ((nickname || persona) && !String(openId).startsWith('dbg_')) {
     try {
       const users = db.collection('users');
       const existing = await users.where({ _openid: openId }).limit(1).get();
@@ -39,6 +49,7 @@ exports.main = async (event) => {
       openId,
       appId: wxContext.APPID,
       unionId: wxContext.UNIONID || null,
+      debug: String(openId).startsWith('dbg_'),
     },
   };
 };

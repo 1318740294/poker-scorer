@@ -1,8 +1,12 @@
+const { getDebugOpenId } = require('./debug');
+
 function call(action, data = {}) {
+  const debugOpenId = getDebugOpenId();
+  const payload = debugOpenId ? { action, ...data, debugOpenId } : { action, ...data };
   return wx.cloud
     .callFunction({
       name: 'api',
-      data: { action, ...data },
+      data: payload,
     })
     .then((res) => {
       const result = res.result || {};

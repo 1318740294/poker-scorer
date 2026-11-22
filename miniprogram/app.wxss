@@ -28,10 +28,12 @@ view, text, button, input {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 18rpx 36rpx;
+  height: 80rpx;
+  min-height: 80rpx;
+  padding: 0 36rpx;
   border-radius: 12rpx;
   font-size: 28rpx;
-  line-height: 1.2;
+  line-height: 80rpx;
   border: none;
 }
 
@@ -60,9 +62,13 @@ view, text, button, input {
   opacity: 0.4;
 }
 
+/* 微信原生 input 对垂直 padding 支持差，易裁切文字；固定高度 + 仅水平 padding */
 .field {
   width: 100%;
-  padding: 20rpx 24rpx;
+  height: 80rpx;
+  min-height: 80rpx;
+  padding: 0 24rpx;
+  line-height: 80rpx;
   background: rgba(0, 0, 0, 0.28);
   border: 1rpx solid rgba(255, 255, 255, 0.12);
   border-radius: 12rpx;
