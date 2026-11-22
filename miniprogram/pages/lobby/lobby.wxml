@@ -1,0 +1,56 @@
+<view class="page" wx:if="{{room}}">
+  <view class="header">
+    <view class="code-wrap">
+      <text class="muted">房号</text>
+      <text class="code" bindtap="copyCode">{{room.code}}</text>
+    </view>
+    <view class="meta muted">{{seatedCount}}/{{room.config.maxSeats}} 人 · 盲注 {{room.config.sb}}/{{room.config.bb}}</view>
+  </view>
+
+  <view class="seat-grid">
+    <view
+      wx:for="{{room.seats}}"
+      wx:key="seatIndex"
+      class="seat {{item.seated ? 'filled' : 'empty'}} {{item.openId === openId ? 'me' : ''}}"
+      data-index="{{item.seatIndex}}"
+      bindtap="onSeatTap"
+    >
+      <view class="avatar" style="background: {{item.seated ? colors[item.persona] : 'rgba(255,255,255,0.08)'}};">
+        {{item.seated ? labels[item.persona] : item.seatIndex + 1}}
+      </view>
+      <view class="name">{{item.seated ? item.nickname : '空位'}}</view>
+      <view class="stack muted" wx:if="{{item.seated}}">{{item.stackBb}}</view>
+      <view class="host-tag" wx:if="{{item.openId === room.hostOpenId}}">房主</view>
+    </view>
+  </view>
+
+  <view class="panel" wx:if="{{isHost}}">
+    <view class="label">盲注设置（房主）</view>
+    <view class="row">
+      <input class="field sm" type="digit" value="{{sb}}" bindinput="onSb" placeholder="SB" />
+      <text class="slash">/</text>
+      <input class="field sm" type="digit" value="{{bb}}" bindinput="onBb" placeholder="BB" />
+      <button class="btn btn-ghost sm-btn" bindtap="saveConfig">保存</button>
+    </view>
+  </view>
+
+  <view class="panel" wx:if="{{!mySeat}}">
+    <view class="label">买入（bb）</view>
+    <input class="field" type="digit" value="{{buyInBb}}" bindinput="onBuyIn" />
+    <view class="muted" style="margin-top:12rpx;">点空位入座 · 最小 {{room.config.minBuyInBb}} bb</view>
+  </view>
+
+  <view class="panel" wx:if="{{mySeat}}">
+    <view class="label">自由改筹码（bb）</view>
+    <view class="row">
+      <input class="field sm" type="digit" value="{{rebuyBb}}" bindinput="onRebuy" />
+      <button class="btn btn-ghost sm-btn" bindtap="doRebuy">Rebuy</button>
+    </view>
+  </view>
+
+  <view class="footer">
+    <button class="btn btn-ghost" bindtap="goTable">进入牌桌</button>
+    <button class="btn btn-primary" wx:if="{{isHost}}" loading="{{busy}}" bindtap="startHand">开一手</button>
+    <button class="btn btn-danger" bindtap="leave">离桌</button>
+  </view>
+</view>
