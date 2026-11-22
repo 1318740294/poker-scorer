@@ -1,0 +1,7 @@
+{
+  "description": "本地私有配置，勿提交敏感信息。可在此覆盖 appid。",
+  "projectname": "poker-scorer",
+  "setting": {
+    "compileHotReLoad": true
+  }
+}

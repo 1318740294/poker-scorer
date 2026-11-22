@@ -1,0 +1,18 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/lobby/lobby",
+    "pages/table/table"
+  ],
+  "window": {
+    "navigationBarTitleText": "德州记分桌",
+    "navigationBarBackgroundColor": "#0f2e1f",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#0b1a12",
+    "backgroundTextStyle": "light"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents",
+  "cloud": true
+}

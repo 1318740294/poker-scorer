@@ -1,0 +1,107 @@
+<view class="page" wx:if="{{room}}">
+  <view class="topbar">
+    <view class="left">
+      <text class="code">{{room.code}}</text>
+      <text class="muted"> · {{streetText}} · 底池 {{potText}}</text>
+    </view>
+    <view class="right">
+      <text class="tb">延时牌 {{room.timeBankRemaining}}</text>
+    </view>
+  </view>
+
+  <view class="felt-wrap">
+    <view class="rail">
+      <view class="felt">
+        <view class="pot-center">
+          <view class="pot-label">POT</view>
+          <view class="pot-val">{{potText}}</view>
+          <view class="street">{{streetText}}</view>
+          <view class="chips-visual" wx:if="{{room.hand && room.hand.pot > 0}}">
+            <view class="chip c1"></view>
+            <view class="chip c2"></view>
+            <view class="chip c3"></view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view
+      wx:for="{{layoutSeats}}"
+      wx:key="seatIndex"
+      class="player {{item.isAction ? 'action' : ''}} {{item.folded ? 'folded' : ''}} {{item.isMe ? 'me' : ''}}"
+      style="left: {{item.left}}; top: {{item.top}};"
+    >
+      <view class="p-avatar" style="background: {{item.color}};">
+        {{item.label}}
+        <view class="ring" wx:if="{{item.isAction}}"></view>
+      </view>
+      <view class="p-info">
+        <view class="p-name">{{item.nickname}}</view>
+        <view class="p-stack">{{item.stackBb}}</view>
+        <view class="p-bet" wx:if="{{item.bet > 0}}">下注 {{item.bet}}</view>
+        <view class="p-tag" wx:if="{{item.isDealer}}">D</view>
+        <view class="p-tag sb" wx:if="{{item.isSB}}">SB</view>
+        <view class="p-tag bb" wx:if="{{item.isBB}}">BB</view>
+        <view class="p-tag allin" wx:if="{{item.allIn}}">ALL-IN</view>
+      </view>
+      <view class="countdown" wx:if="{{item.isAction && countdown}}">{{countdown}}</view>
+    </view>
+  </view>
+
+  <!-- 摊牌：房主点赢家 -->
+  <view class="showdown" wx:if="{{room.status === 'showdown' && room.hand && room.hand.sidePots.length}}">
+    <view class="sd-title">边池结算</view>
+    <view wx:for="{{room.hand.sidePots}}" wx:key="index" class="sd-pot">
+      <view class="sd-line">池{{index + 1}} · {{item.amount}} · 合格座位 {{item.eligibleText}}</view>
+      <view class="sd-winners" wx:if="{{isHost}}">
+        <view
+          wx:for="{{item.eligibleSeatIndexes}}"
+          wx:for-item="esi"
+          wx:key="*this"
+          class="pick {{item.pickedMap[esi] ? 'on' : ''}}"
+          data-pot="{{index}}"
+          data-seat="{{esi}}"
+          bindtap="toggleWinner"
+        >座{{esi + 1}}</view>
+      </view>
+      <view class="muted" wx:else>等待房主点赢家</view>
+    </view>
+    <button class="btn btn-primary" wx:if="{{isHost}}" bindtap="confirmWinners">确认派彩</button>
+  </view>
+
+  <!-- 行动栏 -->
+  <view class="action-bar" wx:if="{{legal}}">
+    <view class="timer-row">
+      <text>{{countdown || '--'}}</text>
+      <button class="btn btn-ghost mini" disabled="{{room.timeBankRemaining <= 0}}" bindtap="useTimeBank">+30s 延时</button>
+    </view>
+    <view class="moves">
+      <button class="btn btn-danger move" bindtap="doFold">弃牌</button>
+      <button class="btn btn-ghost move" wx:if="{{legal.canCheck}}" bindtap="doCheck">过牌</button>
+      <button class="btn btn-ghost move" wx:if="{{legal.canCall}}" bindtap="doCall">跟 {{legal.callAmount}}</button>
+      <button class="btn btn-primary move" wx:if="{{legal.canAllIn}}" bindtap="doAllIn">All-in</button>
+    </view>
+    <view class="shortcuts" wx:if="{{legal.canRaise}}">
+      <button class="btn btn-ghost mini" data-f="0.25" bindtap="raisePot">1/4</button>
+      <button class="btn btn-ghost mini" data-f="0.33" bindtap="raisePot">1/3</button>
+      <button class="btn btn-ghost mini" data-f="0.5" bindtap="raisePot">1/2</button>
+      <input class="field mini-input" type="digit" placeholder="bb" value="{{customBb}}" bindinput="onCustomBb" />
+      <button class="btn btn-primary mini" bindtap="raiseBb">加注</button>
+    </view>
+    <view class="muted hint">最低加到 {{legal.minRaiseTo}} · 快捷为底池相对尺寸</view>
+  </view>
+
+  <!-- 房主工具 -->
+  <view class="host-bar" wx:if="{{isHost}}">
+    <button class="btn btn-ghost mini" bindtap="undo">纠错撤销</button>
+    <button class="btn btn-ghost mini" wx:if="{{timedOut}}" bindtap="forceFold">强制弃牌</button>
+    <button class="btn btn-ghost mini" wx:if="{{timedOut && canForceCheck}}" bindtap="forceCheck">强制过牌</button>
+    <button class="btn btn-primary mini" wx:if="{{room.status !== 'playing'}}" bindtap="startHand">下一手</button>
+    <button class="btn btn-ghost mini" bindtap="openRebuy">改筹码</button>
+  </view>
+
+  <view class="bottom-nav">
+    <button class="btn btn-ghost mini" bindtap="goLobby">候场</button>
+    <button class="btn btn-ghost mini" bindtap="leave">离桌</button>
+  </view>
+</view>

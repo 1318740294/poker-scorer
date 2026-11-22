@@ -1,0 +1,35 @@
+<view class="page">
+  <view class="hero">
+    <view class="brand">德州记分桌</view>
+    <view class="tagline">现金局共享桌 · 无牌面纯记分</view>
+  </view>
+
+  <view class="panel">
+    <view class="label">你的昵称</view>
+    <input class="field" placeholder="怎么称呼你" value="{{nickname}}" bindinput="onNick" maxlength="12" />
+
+    <view class="label" style="margin-top: 28rpx;">形象</view>
+    <scroll-view scroll-x class="persona-row">
+      <view
+        wx:for="{{personas}}"
+        wx:key="*this"
+        class="persona {{persona === item ? 'on' : ''}}"
+        style="background: {{colors[item]}};"
+        data-id="{{item}}"
+        bindtap="onPersona"
+      >{{labels[item]}}</view>
+    </scroll-view>
+  </view>
+
+  <view class="actions">
+    <button class="btn btn-primary block" loading="{{busy}}" bindtap="onCreate">创建房间</button>
+    <view class="join-row">
+      <input class="field code" placeholder="输入 6 位房号" value="{{code}}" bindinput="onCode" maxlength="6" />
+      <button class="btn btn-ghost" loading="{{busy}}" bindtap="onJoin">加入</button>
+    </view>
+  </view>
+
+  <view class="hint muted">
+    5–12 人 · 自动盲注 · 边池自动拆 · 房主点赢家
+  </view>
+</view>

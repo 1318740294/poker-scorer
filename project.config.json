@@ -1,0 +1,25 @@
+{
+  "miniprogramRoot": "miniprogram/",
+  "cloudfunctionRoot": "cloudfunctions/",
+  "setting": {
+    "urlCheck": true,
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "minified": true,
+    "coverView": true,
+    "showShadowRootInWxmlPanel": true,
+    "babelSetting": {
+      "ignore": [],
+      "disablePlugins": [],
+      "outputPath": ""
+    }
+  },
+  "appid": "touristappid",
+  "projectname": "poker-scorer",
+  "libVersion": "3.5.5",
+  "compileType": "miniprogram",
+  "condition": {},
+  "cloudfunctionTemplateRoot": "",
+  "description": "德州扑克现金局记分桌 · 微信小程序 MVP"
+}
