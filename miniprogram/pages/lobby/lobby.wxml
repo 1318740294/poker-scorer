@@ -5,6 +5,7 @@
       <text class="code" bindtap="copyCode">{{room.code}}</text>
     </view>
     <view class="meta muted">{{seatedCount}}/{{room.config.maxSeats}} 人 · 盲注 {{room.config.sb}}/{{room.config.bb}}</view>
+    <view class="identity" wx:if="{{identityText}}">当前身份 · {{identityText}}</view>
   </view>
 
   <view class="seat-grid">

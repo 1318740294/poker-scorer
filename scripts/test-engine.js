@@ -125,6 +125,69 @@ function testUndo() {
   console.log('✓ correct undo');
 }
 
+/** 模拟单人调试：dbg_host 建房后 dbg_p2 入座，应有两个不同座位 */
+function testMultiIdentitySeats() {
+  const room = engine.createRoom({
+    hostOpenId: 'dbg_host',
+    nickname: 'Host',
+    persona: 'fox',
+    config: { sb: 1, bb: 2, maxSeats: 9, defaultBuyInBb: 100 },
+  });
+  assert(room.seats[0].openId === 'dbg_host' && room.seats[0].seated, 'host auto-seated');
+  assert(room.hostOpenId === 'dbg_host', 'hostOpenId dbg');
+
+  engine.sitDown(room, {
+    openId: 'dbg_p2',
+    nickname: '玩家2',
+    persona: 'bear',
+    seatIndex: 1,
+    buyInBb: 100,
+  });
+
+  const seated = room.seats.filter((s) => s.seated);
+  assert(seated.length === 2, `two seated got ${seated.length}`);
+  assert(seated[0].openId === 'dbg_host', 'seat0 host');
+  assert(seated[1].openId === 'dbg_p2', 'seat1 p2');
+  assert(seated[0].openId !== seated[1].openId, 'distinct openIds');
+
+  let threw = false;
+  try {
+    engine.sitDown(room, {
+      openId: 'dbg_host',
+      nickname: 'Host',
+      persona: 'fox',
+      seatIndex: 2,
+      buyInBb: 100,
+    });
+  } catch (e) {
+    threw = /已入座/.test(e.message);
+  }
+  assert(threw, 'same dbg id cannot double-sit');
+
+  // 同一真实 openId 占第二席应失败（模拟未切换身份）
+  const room2 = engine.createRoom({
+    hostOpenId: 'oREAL',
+    nickname: 'Me',
+    persona: 'fox',
+    config: { maxSeats: 6, defaultBuyInBb: 50 },
+  });
+  threw = false;
+  try {
+    engine.sitDown(room2, {
+      openId: 'oREAL',
+      nickname: 'Me2',
+      persona: 'bear',
+      seatIndex: 1,
+      buyInBb: 50,
+    });
+  } catch (e) {
+    threw = /已入座/.test(e.message);
+  }
+  assert(threw, 'same real openId cannot take two seats');
+  assert(room2.seats.filter((s) => s.seated).length === 1, 'still one seat');
+  console.log('✓ multi-identity seats');
+}
+
 function main() {
   testStartAndBlinds();
   testFoldToWinner();
@@ -132,6 +195,7 @@ function main() {
   testSidePots();
   testTimeBank();
   testUndo();
+  testMultiIdentitySeats();
   console.log('\nAll engine tests passed.');
 }
 

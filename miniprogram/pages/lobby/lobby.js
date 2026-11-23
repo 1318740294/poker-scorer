@@ -1,11 +1,13 @@
 const api = require('../../utils/api');
 const { PERSONA_LABEL, PERSONA_COLOR, stackBb } = require('../../utils/format');
+const { identityLabel, getDebugOpenId, isDevelop } = require('../../utils/debug');
 
 Page({
   data: {
     roomId: '',
     room: null,
     openId: '',
+    identityText: '',
     isHost: false,
     mySeat: null,
     seatedCount: 0,
@@ -26,7 +28,13 @@ Page({
 
   onShow() {
     const app = getApp();
-    this.setData({ openId: app.globalData.openId || '' });
+    // 优先调试身份 / 全局 openId，避免仍显示上一身份为「我」
+    const openId =
+      (isDevelop() && getDebugOpenId()) || app.globalData.openId || '';
+    this.setData({
+      openId,
+      identityText: identityLabel(openId),
+    });
     this.watchRoom();
   },
 
@@ -60,28 +68,39 @@ Page({
           if (doc) this.applyRoom(doc);
         },
         onError: async () => {
-          // fallback poll once
           try {
             const data = await api.getRoom({ roomId });
-            if (data.room) this.applyRoom(data.room);
-            if (data.me) this.setData({ openId: data.me });
+            if (data.room) this.applyRoom(data.room, data.me);
           } catch (e) {
             console.warn(e);
           }
         },
       });
 
-    api.getRoom({ roomId }).then((data) => {
-      if (data.me) this.setData({ openId: data.me });
-      if (data.room) this.applyRoom(data.room);
-    }).catch((e) => {
-      wx.showToast({ title: e.message || '加载失败', icon: 'none' });
-    });
+    api
+      .getRoom({ roomId })
+      .then((data) => {
+        if (data.room) this.applyRoom(data.room, data.me);
+      })
+      .catch((e) => {
+        wx.showToast({ title: e.message || '加载失败', icon: 'none' });
+      });
   },
 
-  applyRoom(room) {
+  /**
+   * @param {object} room
+   * @param {string} [openIdOverride] 必须传入 getRoom 返回的 me，避免 setData 异步导致仍用旧 openId
+   */
+  applyRoom(room, openIdOverride) {
     const app = getApp();
-    const openId = this.data.openId || app.globalData.openId;
+    const openId =
+      openIdOverride ||
+      this.data.openId ||
+      (isDevelop() && getDebugOpenId()) ||
+      app.globalData.openId ||
+      '';
+    if (openId) app.globalData.openId = openId;
+
     const bb = room.config.bb;
     room.seats = (room.seats || []).map((s) => ({
       ...s,
@@ -92,6 +111,7 @@ Page({
     this.setData({
       room,
       openId,
+      identityText: identityLabel(openId),
       isHost: room.hostOpenId === openId,
       mySeat,
       seatedCount,
@@ -100,10 +120,6 @@ Page({
       buyInBb: String(room.config.defaultBuyInBb),
       rebuyBb: mySeat ? String(Math.round(mySeat.stack / bb)) : String(room.config.defaultBuyInBb),
     });
-
-    if (room.status === 'playing' || room.status === 'showdown') {
-      // auto enter table view
-    }
   },
 
   copyCode() {
@@ -144,13 +160,22 @@ Page({
       return;
     }
     const app = getApp();
+    const expectedId =
+      (isDevelop() && getDebugOpenId()) || app.globalData.openId || this.data.openId;
     try {
-      await api.sitDown({
+      const data = await api.sitDown({
         roomId: this.data.roomId,
         seatIndex: index,
         nickname: app.globalData.nickname || '玩家',
         persona: app.globalData.persona || 'fox',
         buyInBb: Number(this.data.buyInBb) || 100,
+      });
+      const me = data.me || expectedId;
+      if (me) app.globalData.openId = me;
+      if (data.room) this.applyRoom(data.room, me);
+      wx.showToast({
+        title: `已入座 · ${identityLabel(me)}`,
+        icon: 'none',
       });
     } catch (err) {
       wx.showToast({ title: err.message || '入座失败', icon: 'none' });
