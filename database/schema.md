@@ -14,7 +14,7 @@
 | `config` | object | `sb`, `bb`, `defaultBuyInBb`, `minBuyInBb`, `actionTimeoutSec`, `maxSeats` |
 | `seats` | array | 长度 = maxSeats；见下方 seat |
 | `buttonSeat` | number | 庄位 |
-| `hand` | object \| null | 当前手牌状态 |
+| `hand` | object \| null | 当前手牌状态；云函数 `saveRoom` 必须用 `_.set(hand)` 整段写入，禁止在 `hand: null` 上更新嵌套字段（否则 -502001） |
 | `timeBankRemaining` | number | 整场共享延时牌，初始 3 |
 | `pendingLeave` | array | 手结束后离桌的 openId 列表 |
 | `actionLog` | array | 最近操作（供房主纠错撤销） |

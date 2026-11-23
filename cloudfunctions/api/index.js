@@ -2,6 +2,7 @@ const cloud = require('wx-server-sdk');
 const engine = require('./lib/engine');
 const { PERSONAS } = require('./lib/constants');
 const { resolveOpenId, buildDebugMeta } = require('./lib/openid');
+const { buildRoomUpdateData } = require('./lib/roomUpdate');
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
@@ -51,10 +52,12 @@ async function loadRoomByCode(code) {
 
 async function saveRoom(room) {
   const id = room._id;
+  const data = buildRoomUpdateData(room, _);
+  await db.collection('rooms').doc(id).update({ data });
+  // 返回可读的房间快照（不含 command 包装）
   const copy = { ...room };
   delete copy._id;
-  copy.updatedAt = Date.now();
-  await db.collection('rooms').doc(id).update({ data: copy });
+  copy.updatedAt = data.updatedAt;
   return { ...copy, _id: id };
 }
 
