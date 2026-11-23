@@ -62,6 +62,7 @@ function countdownText(deadline) {
 
 module.exports = {
   PERSONA_LABEL,
+  PERSONA_COLOR,
   personaLabel,
   personaColor,
   stackBb,

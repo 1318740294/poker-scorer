@@ -106,3 +106,18 @@
     <button class="btn btn-ghost mini" bindtap="leave">离桌</button>
   </view>
 </view>
+
+<!-- 加载 / 错误：避免空白深绿屏 -->
+<view class="page empty-state" wx:elif="{{loading}}">
+  <view class="empty-title">加载牌桌…</view>
+  <view class="muted">正在同步房间 {{roomId}}</view>
+</view>
+
+<view class="page empty-state" wx:else>
+  <view class="empty-title">无法进入牌桌</view>
+  <view class="muted">{{loadError || '房间数据不可用'}}</view>
+  <view class="empty-actions">
+    <button class="btn btn-primary" bindtap="retryLoad" wx:if="{{roomId}}">重试</button>
+    <button class="btn btn-ghost" bindtap="goLobby" wx:if="{{roomId}}">回候场</button>
+  </view>
+</view>

@@ -2,6 +2,7 @@ const api = require('../../utils/api');
 const {
   PERSONA_LABEL,
   PERSONA_COLOR,
+  personaColor,
   stackBb,
   streetLabel,
   countdownText,
@@ -24,6 +25,11 @@ function seatPositions(count) {
   return positions;
 }
 
+function seatColor(persona) {
+  if (PERSONA_COLOR && PERSONA_COLOR[persona]) return PERSONA_COLOR[persona];
+  return personaColor(persona);
+}
+
 Page({
   data: {
     roomId: '',
@@ -39,13 +45,18 @@ Page({
     streetText: '-',
     customBb: '2',
     potPicks: {},
+    loadError: '',
+    loading: true,
   },
 
   watcher: null,
   timer: null,
 
   onLoad(query) {
-    this.setData({ roomId: query.roomId || '' });
+    // 同步写入 this.data，避免 onShow 早于 setData 刷盘时 roomId 仍为空
+    const roomId = (query && query.roomId) || '';
+    this.roomId = roomId;
+    this.setData({ roomId, loading: !!roomId, loadError: roomId ? '' : '缺少房间参数' });
   },
 
   onShow() {
@@ -103,33 +114,82 @@ Page({
     });
   },
 
+  resolveRoomId() {
+    return this.roomId || this.data.roomId || '';
+  },
+
   watchRoom() {
     if (this.watcher && this.watcher.close) this.watcher.close();
-    const { roomId } = this.data;
-    if (!roomId) return;
+    const roomId = this.resolveRoomId();
+    if (!roomId) {
+      this.setData({ loading: false, loadError: '缺少房间参数', room: null });
+      return;
+    }
+    if (!this.data.roomId) this.setData({ roomId });
+    this.setData({ loading: !this.data.room, loadError: '' });
 
-    const db = wx.cloud.database();
-    this.watcher = db
-      .collection('rooms')
-      .doc(roomId)
-      .watch({
-        onChange: (snap) => {
-          const doc = (snap.docs && snap.docs[0]) || null;
-          if (doc) this.applyRoom(doc);
-        },
-        onError: () => {
-          api.getRoom({ roomId }).then((d) => {
-            if (d.room) this.applyRoom(d.room, d.legal, d.me);
+    const fetchOnce = () =>
+      api
+        .getRoom({ roomId })
+        .then((d) => {
+          if (d.room) this.applyRoom(d.room, d.legal, d.me);
+          else {
+            this.setData({
+              loading: false,
+              loadError: '房间不存在或已解散',
+              room: null,
+            });
+          }
+        })
+        .catch((e) => {
+          console.warn('[table] getRoom failed', e);
+          this.setData({
+            loading: false,
+            loadError: (e && e.message) || '加载牌桌失败',
+            room: null,
           });
-        },
-      });
+        });
 
-    api.getRoom({ roomId }).then((d) => {
-      if (d.room) this.applyRoom(d.room, d.legal, d.me);
-    });
+    if (wx.cloud) {
+      try {
+        const db = wx.cloud.database();
+        this.watcher = db
+          .collection('rooms')
+          .doc(roomId)
+          .watch({
+            onChange: (snap) => {
+              const doc = (snap.docs && snap.docs[0]) || null;
+              if (doc) {
+                try {
+                  this.applyRoom(doc);
+                } catch (e) {
+                  console.warn('[table] applyRoom from watch failed', e);
+                  fetchOnce();
+                }
+              }
+            },
+            onError: () => {
+              fetchOnce();
+            },
+          });
+      } catch (e) {
+        console.warn('[table] watch setup failed', e);
+      }
+    }
+
+    fetchOnce();
   },
 
   applyRoom(room, legalFromServer, serverMe) {
+    if (!room || !room.config || !Array.isArray(room.seats)) {
+      this.setData({
+        loading: false,
+        loadError: '房间数据异常',
+        room: null,
+      });
+      return;
+    }
+
     const app = getApp();
     const openId = effectiveOpenId(
       serverMe,
@@ -145,6 +205,7 @@ Page({
     let bbIdx = null;
     if (room.hand) {
       const occupied = (from) => {
+        if (from == null) return null;
         for (let i = 1; i <= n; i++) {
           const idx = (from + i) % n;
           if (room.seats[idx].seated && room.seats[idx].openId) return idx;
@@ -160,62 +221,75 @@ Page({
       left: pos[i].left,
       top: pos[i].top,
       label: s.seated ? PERSONA_LABEL[s.persona] || '?' : String(i + 1),
-      color: s.seated ? PERSONA_COLOR[s.persona] || '#555' : 'rgba(255,255,255,0.08)',
+      color: s.seated ? seatColor(s.persona) : 'rgba(255,255,255,0.08)',
       stackBb: s.seated ? stackBb(s.stack, bb) : '',
       nickname: s.seated ? s.nickname : '',
       isMe: s.openId === openId,
-      isAction: room.hand && room.hand.actionSeat === i,
+      isAction: !!(room.hand && room.hand.actionSeat === i),
       isDealer: room.buttonSeat === i && s.seated,
       isSB: sbIdx === i,
       isBB: bbIdx === i,
     }));
 
-    if (room.hand && room.hand.sidePots) {
-      room.hand.sidePots = room.hand.sidePots.map((p, index) => {
-        const picked = (this.data.potPicks[index] || p.winnerSeatIndexes || []);
-        const pickedMap = {};
-        picked.forEach((x) => {
-          pickedMap[x] = true;
-        });
-        return {
-          ...p,
-          eligibleText: (p.eligibleSeatIndexes || []).map((x) => x + 1).join(','),
-          pickedMap,
-        };
-      });
+    // 拷贝 hand，避免原地改 watch 文档引用
+    let hand = room.hand;
+    if (hand && Array.isArray(hand.sidePots)) {
+      hand = {
+        ...hand,
+        sidePots: hand.sidePots.map((p, index) => {
+          const picked = this.data.potPicks[index] || p.winnerSeatIndexes || [];
+          const pickedMap = {};
+          picked.forEach((x) => {
+            pickedMap[x] = true;
+          });
+          return {
+            ...p,
+            eligibleText: (p.eligibleSeatIndexes || []).map((x) => x + 1).join(','),
+            pickedMap,
+          };
+        }),
+      };
     }
+    const viewRoom = hand === room.hand ? room : { ...room, hand };
 
     let legal = legalFromServer || null;
-    if (!legal && room.hand && room.status === 'playing') {
-      const my = room.seats.find((s) => s.openId === openId && s.seated);
-      if (my && room.hand.actionSeat === my.seatIndex) {
+    if (!legal && viewRoom.hand && viewRoom.status === 'playing') {
+      const my = viewRoom.seats.find((s) => s.openId === openId && s.seated);
+      if (my && viewRoom.hand.actionSeat === my.seatIndex) {
         // client-side mirror of legal actions (server authoritative on submit)
-        const toCall = Math.max(0, room.hand.currentBet - my.bet);
+        const toCall = Math.max(0, viewRoom.hand.currentBet - my.bet);
         legal = {
           canFold: true,
           canCheck: toCall === 0,
           canCall: toCall > 0 && my.stack > 0,
           callAmount: Math.min(toCall, my.stack),
           canRaise: my.stack > toCall,
-          minRaiseTo: room.hand.minRaiseTo,
+          minRaiseTo: viewRoom.hand.minRaiseTo,
           maxRaiseTo: my.bet + my.stack,
           canAllIn: my.stack > 0,
-          timeBankRemaining: room.timeBankRemaining,
-          deadline: room.hand.actionDeadline,
+          timeBankRemaining: viewRoom.timeBankRemaining,
+          deadline: viewRoom.hand.actionDeadline,
         };
       }
     }
 
     this.setData({
-      room,
+      room: viewRoom,
       openId,
-      isHost: room.hostOpenId === openId,
+      isHost: viewRoom.hostOpenId === openId,
       layoutSeats,
       legal,
-      potText: room.hand ? String(room.hand.pot) : '0',
-      streetText: room.hand ? streetLabel(room.hand.street) : '候场',
+      potText: viewRoom.hand ? String(viewRoom.hand.pot) : '0',
+      streetText: viewRoom.hand ? streetLabel(viewRoom.hand.street) : '候场',
       customBb: String(bb),
+      loading: false,
+      loadError: '',
     });
+  },
+
+  retryLoad() {
+    this.setData({ loading: true, loadError: '' });
+    this.watchRoom();
   },
 
   onCustomBb(e) {
@@ -252,7 +326,7 @@ Page({
   async move(playerAction, extra = {}) {
     try {
       const data = await api.action({
-        roomId: this.data.roomId,
+        roomId: this.resolveRoomId(),
         playerAction,
         ...extra,
       });
@@ -264,7 +338,7 @@ Page({
 
   async useTimeBank() {
     try {
-      const data = await api.timeBank({ roomId: this.data.roomId });
+      const data = await api.timeBank({ roomId: this.resolveRoomId() });
       if (data.room) this.applyRoom(data.room);
     } catch (e) {
       wx.showToast({ title: e.message || '无法延时', icon: 'none' });
@@ -273,7 +347,7 @@ Page({
 
   async forceFold() {
     try {
-      await api.forceAction({ roomId: this.data.roomId, force: 'fold' });
+      await api.forceAction({ roomId: this.resolveRoomId(), force: 'fold' });
     } catch (e) {
       wx.showToast({ title: e.message || '失败', icon: 'none' });
     }
@@ -281,7 +355,7 @@ Page({
 
   async forceCheck() {
     try {
-      await api.forceAction({ roomId: this.data.roomId, force: 'check' });
+      await api.forceAction({ roomId: this.resolveRoomId(), force: 'check' });
     } catch (e) {
       wx.showToast({ title: e.message || '失败', icon: 'none' });
     }
@@ -289,7 +363,7 @@ Page({
 
   async undo() {
     try {
-      await api.correctUndo({ roomId: this.data.roomId });
+      await api.correctUndo({ roomId: this.resolveRoomId() });
       wx.showToast({ title: '已撤销', icon: 'success' });
     } catch (e) {
       wx.showToast({ title: e.message || '无法撤销', icon: 'none' });
@@ -298,7 +372,7 @@ Page({
 
   async startHand() {
     try {
-      await api.startHand({ roomId: this.data.roomId });
+      await api.startHand({ roomId: this.resolveRoomId() });
       this.setData({ potPicks: {} });
     } catch (e) {
       wx.showToast({ title: e.message || '无法开局', icon: 'none' });
@@ -326,7 +400,7 @@ Page({
       winnerSeatIndexes: this.data.potPicks[potIndex] || p.winnerSeatIndexes || [],
     }));
     try {
-      await api.pickWinners({ roomId: this.data.roomId, potWinners });
+      await api.pickWinners({ roomId: this.resolveRoomId(), potWinners });
       this.setData({ potPicks: {} });
     } catch (e) {
       wx.showToast({ title: e.message || '结算失败', icon: 'none' });
@@ -341,10 +415,10 @@ Page({
       placeholderText: '例如 100',
       success: async (res) => {
         if (!res.confirm) return;
-        const stackBb = Number(res.content);
-        if (!(stackBb >= 0)) return;
+        const stackBbVal = Number(res.content);
+        if (!(stackBbVal >= 0)) return;
         try {
-          await api.rebuy({ roomId: this.data.roomId, stackBb });
+          await api.rebuy({ roomId: this.resolveRoomId(), stackBb: stackBbVal });
         } catch (e) {
           wx.showToast({ title: e.message || '失败', icon: 'none' });
         }
@@ -354,13 +428,13 @@ Page({
 
   goLobby() {
     wx.navigateTo({
-      url: `/pages/lobby/lobby?roomId=${this.data.roomId}`,
+      url: `/pages/lobby/lobby?roomId=${this.resolveRoomId()}`,
     });
   },
 
   async leave() {
     try {
-      await api.leave({ roomId: this.data.roomId });
+      await api.leave({ roomId: this.resolveRoomId() });
       wx.showToast({ title: '将于本手结束后离桌', icon: 'none' });
     } catch (e) {
       wx.showToast({ title: e.message || '失败', icon: 'none' });
