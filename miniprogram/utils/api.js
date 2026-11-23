@@ -1,9 +1,10 @@
-const { getDebugOpenId } = require('./debug');
+const { getDebugOpenId, isDbgId, assertResolvedDebugId } = require('./debug');
 
 /**
  * @param {string} action
  * @param {object} [data]
- * @param {{ debugOpenId?: string }} [opts] 单次覆盖（一键双人自测用）
+ * @param {{ debugOpenId?: string, expectDebugId?: string|boolean }} [opts]
+ *   expectDebugId: 期望的 dbg_*；true=用本次 payload 的 debugOpenId；失败抛错
  */
 function call(action, data = {}, opts = {}) {
   const debugOpenId =
@@ -25,15 +26,42 @@ function call(action, data = {}, opts = {}) {
         throw err;
       }
       const out = result.data || {};
+      // 统一补齐 resolvedOpenId
+      if (!out.resolvedOpenId && out.me) out.resolvedOpenId = out.me;
+      if (out.debugMeta && !out.debugMeta.resolvedOpenId && out.resolvedOpenId) {
+        out.debugMeta.resolvedOpenId = out.resolvedOpenId;
+      }
+
       // 同步全局身份 / 错配提示
       try {
         const app = getApp();
         if (app && app.syncIdentityFromServer) {
-          app.syncIdentityFromServer(out.me, out.debugMeta);
+          app.syncIdentityFromServer(out.me || out.resolvedOpenId, out.debugMeta);
         }
       } catch (e) {
         // getApp 在极端时机可能不可用
       }
+
+      // 调试开着时：每次云调用都断言 resolvedOpenId === 期望 dbg_*
+      let expect = opts.expectDebugId;
+      if (expect === true) expect = debugOpenId;
+      if (expect === undefined && isDbgId(debugOpenId)) expect = debugOpenId;
+      if (isDbgId(expect)) {
+        const bad = assertResolvedDebugId(out, expect);
+        if (bad) {
+          const src =
+            (out.debugMeta && out.debugMeta.source) != null
+              ? out.debugMeta.source
+              : '';
+          const err = new Error(
+            `云函数未接受调试身份，请重传 api（期望 ${bad.expected}，得到 ${bad.got}，SOURCE=${src || '空'}）`
+          );
+          err.code = 'DEBUG_ID_REJECTED';
+          err.debugMeta = out.debugMeta;
+          throw err;
+        }
+      }
+
       return out;
     });
 }

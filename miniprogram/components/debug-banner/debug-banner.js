@@ -2,7 +2,6 @@ const {
   getDebugOpenId,
   isDebugModeOn,
   isDebugUiEnabled,
-  identityLabel,
   isDbgId,
 } = require('../../utils/debug');
 
@@ -31,12 +30,14 @@ Component({
         this.setData({ visible: false, label: '', mismatch: false });
         return;
       }
+      // getDebugOpenId 在调试开着时保证返回 dbg_*
       const id = getDebugOpenId();
       if (!isDbgId(id)) {
+        // 理论上不可达；仍大声提示
         this.setData({
           visible: true,
-          label: '真实 openId（调试已开）',
-          mismatch: false,
+          label: '异常：无 dbg_*，请重开调试',
+          mismatch: true,
         });
         return;
       }

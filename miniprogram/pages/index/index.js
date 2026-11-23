@@ -28,7 +28,8 @@ Page({
     const app = getApp();
     const showDebug = debug.isDebugUiEnabled();
     const debugOn = showDebug && debug.isDebugModeOn();
-    const debugOpenId = debug.getDebugOpenId();
+    // 调试开着时 getDebugOpenId 保证 dbg_*
+    const debugOpenId = debugOn ? debug.getDebugOpenId() : '';
     let mismatchText = '';
     if (app.globalData.debugMismatch) {
       const m = app.globalData.debugMismatch;
@@ -67,8 +68,8 @@ Page({
       this.setData({ debugOn: false, debugOpenId: '', mismatchText: '' });
       wx.showToast({ title: '已关闭调试身份', icon: 'none' });
     } else {
-      // 开启即默认 dbg_host 并持久化
-      const id = 'dbg_host';
+      // 开启即默认 dbg_host 并持久化 —— 绝不能停在「真实 openId」
+      const id = debug.DEFAULT_DBG;
       await app.applyDebugIdentity(id, { turnOn: true });
       const nick = debug.NICK_MAP[id];
       if (nick) {
@@ -88,18 +89,20 @@ Page({
 
   async onPickDebugId(e) {
     if (!this.data.showDebug || !this.data.debugOn) return;
-    const id = e.currentTarget.dataset.id || '';
+    let id = e.currentTarget.dataset.id || '';
+    // 只允许 dbg_*；脏值回落 dbg_host
+    if (!debug.isDbgId(id)) id = debug.DEFAULT_DBG;
     const app = getApp();
     await app.applyDebugIdentity(id, { turnOn: true });
     const patch = { debugOpenId: id };
-    if (id && debug.NICK_MAP[id]) {
+    if (debug.NICK_MAP[id]) {
       patch.nickname = debug.NICK_MAP[id];
       app.saveProfile({ nickname: patch.nickname, persona: this.data.persona });
     }
     this.setData(patch);
     this.refreshDebugUi();
     wx.showToast({
-      title: id ? `调试身份: ${id}` : '真实 openId',
+      title: `调试身份: ${id}`,
       icon: 'none',
     });
     const banner = this.selectComponent('#dbgBanner');
@@ -114,6 +117,23 @@ Page({
     return { nickname, persona };
   },
 
+  _ensureDbgOrThrow(response, expected) {
+    const bad = debug.assertResolvedDebugId(response, expected);
+    if (bad) {
+      const src =
+        (response && response.debugMeta && response.debugMeta.source) || '';
+      throw new Error(
+        `云函数未接受调试身份，请重传 api（期望 ${bad.expected}，得到 ${bad.got}，SOURCE=${src || '空'}）`
+      );
+    }
+    const me = (response && (response.resolvedOpenId || response.me)) || '';
+    if (!String(me).startsWith('dbg_')) {
+      throw new Error(
+        `云函数未接受调试身份，请重传 api（me=${me || '空'} 不是 dbg_*）`
+      );
+    }
+  },
+
   async onCreate() {
     if (this.data.busy) return;
     if (this.data.showDebug && !this.data.debugOn) {
@@ -126,33 +146,39 @@ Page({
     const profile = this.persistProfile();
     this.setData({ busy: true });
     try {
-      if (this.data.debugOn) {
-        await getApp().applyDebugIdentity(this.data.debugOpenId || 'dbg_host', {
-          turnOn: true,
-        });
+      const expectDbg = this.data.debugOn
+        ? this.data.debugOpenId || debug.DEFAULT_DBG
+        : '';
+      if (expectDbg) {
+        await getApp().applyDebugIdentity(expectDbg, { turnOn: true });
       }
-      const { room, me, debugMeta } = await api.createRoom({
-        nickname: profile.nickname,
-        persona: profile.persona,
-        config: {
-          sb: 1,
-          bb: 2,
-          maxSeats: 9,
-          defaultBuyInBb: 100,
+      const out = await api.createRoom(
+        {
+          nickname: profile.nickname,
+          persona: profile.persona,
+          config: {
+            sb: 1,
+            bb: 2,
+            maxSeats: 9,
+            defaultBuyInBb: 100,
+          },
         },
-      });
-      if (this.data.debugOn && debugMeta && !debugMeta.debugApplied) {
-        wx.showModal({
-          title: '调试身份未生效',
-          content: `请求 ${debugMeta.requested}，云端解析为 ${me}（SOURCE=${debugMeta.source || '空'}）。请重新上传并部署 login + api 云函数。`,
-          showCancel: false,
-        });
-      }
+        expectDbg ? { debugOpenId: expectDbg, expectDebugId: expectDbg } : {}
+      );
+      if (expectDbg) this._ensureDbgOrThrow(out, expectDbg);
       wx.navigateTo({
-        url: `/pages/lobby/lobby?roomId=${room._id}`,
+        url: `/pages/lobby/lobby?roomId=${out.room._id}`,
       });
     } catch (e) {
-      wx.showToast({ title: e.message || '创建失败', icon: 'none' });
+      if (e.code === 'DEBUG_ID_REJECTED' || /未接受调试身份/.test(e.message || '')) {
+        wx.showModal({
+          title: '调试身份未生效',
+          content: e.message || '请重传 login+api 云函数',
+          showCancel: false,
+        });
+      } else {
+        wx.showToast({ title: e.message || '创建失败', icon: 'none' });
+      }
     } finally {
       this.setData({ busy: false });
     }
@@ -168,17 +194,30 @@ Page({
     this.persistProfile();
     this.setData({ busy: true });
     try {
-      if (this.data.debugOn) {
-        await getApp().applyDebugIdentity(this.data.debugOpenId || '', {
-          turnOn: true,
-        });
+      const expectDbg = this.data.debugOn
+        ? this.data.debugOpenId || debug.DEFAULT_DBG
+        : '';
+      if (expectDbg) {
+        await getApp().applyDebugIdentity(expectDbg, { turnOn: true });
       }
-      const data = await api.joinRoom({ code });
+      const data = await api.joinRoom(
+        { code },
+        expectDbg ? { debugOpenId: expectDbg, expectDebugId: expectDbg } : {}
+      );
+      if (expectDbg) this._ensureDbgOrThrow(data, expectDbg);
       wx.navigateTo({
         url: `/pages/lobby/lobby?roomId=${data.room._id}`,
       });
     } catch (e) {
-      wx.showToast({ title: e.message || '加入失败', icon: 'none' });
+      if (e.code === 'DEBUG_ID_REJECTED' || /未接受调试身份/.test(e.message || '')) {
+        wx.showModal({
+          title: '调试身份未生效',
+          content: e.message || '请重传 login+api 云函数',
+          showCancel: false,
+        });
+      } else {
+        wx.showToast({ title: e.message || '加入失败', icon: 'none' });
+      }
     } finally {
       this.setData({ busy: false });
     }
@@ -186,7 +225,7 @@ Page({
 
   /**
    * 一键：dbg_host 建房占座0 → dbg_p2 加入占座1 → 切回 dbg_host 进候场。
-   * 每步用 opts.debugOpenId 直传，避免 storage 竞态。
+   * 每步校验 response.me / resolvedOpenId 以 dbg_ 开头；失败大声报错，绝不静默用真实 openId 占多席。
    */
   async onDualSelfTest() {
     if (this.data.busy || !this.data.showDebug) return;
@@ -202,13 +241,11 @@ Page({
           persona: this.data.persona || 'fox',
           config: { sb: 1, bb: 2, maxSeats: 9, defaultBuyInBb: 100 },
         },
-        { debugOpenId: 'dbg_host' }
+        { debugOpenId: 'dbg_host', expectDebugId: 'dbg_host' }
       );
-      if (!created.debugMeta || !created.debugMeta.debugApplied) {
-        const meta = created.debugMeta || {};
-        throw new Error(
-          `云端未采用 dbg_host（me=${created.me}, SOURCE=${meta.source || '空'}）。请重传 login+api`
-        );
+      this._ensureDbgOrThrow(created, 'dbg_host');
+      if (!String(created.me || '').startsWith('dbg_')) {
+        throw new Error('云函数未接受调试身份，请重传 api');
       }
       const roomId = created.room._id;
       const code = created.room.code;
@@ -216,12 +253,12 @@ Page({
       await app.applyDebugIdentity('dbg_p2', { turnOn: true });
       app.saveProfile({ nickname: '玩家2', persona: this.data.persona || 'fox' });
 
-      const joined = await api.joinRoom({ code }, { debugOpenId: 'dbg_p2' });
-      if (!joined.debugMeta || !joined.debugMeta.debugApplied) {
-        throw new Error('云端未采用 dbg_p2，请重传 api 云函数');
-      }
+      const joined = await api.joinRoom(
+        { code },
+        { debugOpenId: 'dbg_p2', expectDebugId: 'dbg_p2' }
+      );
+      this._ensureDbgOrThrow(joined, 'dbg_p2');
 
-      // 找第一个空位（通常是 1）
       const empty = (joined.room.seats || []).find((s) => !s.seated);
       if (!empty) throw new Error('没有空位可坐');
 
@@ -233,10 +270,17 @@ Page({
           persona: this.data.persona || 'fox',
           buyInBb: 100,
         },
-        { debugOpenId: 'dbg_p2' }
+        { debugOpenId: 'dbg_p2', expectDebugId: 'dbg_p2' }
       );
-      if (!sat.debugMeta || !sat.debugMeta.debugApplied) {
-        throw new Error('dbg_p2 入座未生效，请重传 api');
+      this._ensureDbgOrThrow(sat, 'dbg_p2');
+
+      // 确认两席 openId 不同
+      const seated = (sat.room.seats || []).filter((s) => s.seated);
+      const ids = seated.map((s) => s.openId);
+      if (seated.length < 2 || ids[0] === ids[1]) {
+        throw new Error(
+          '云函数未接受调试身份，两席仍是同一 openId。请重传 api'
+        );
       }
 
       await app.applyDebugIdentity('dbg_host', { turnOn: true });
@@ -256,7 +300,7 @@ Page({
       console.error('dual self test', e);
       wx.showModal({
         title: '双人自测失败',
-        content: e.message || '未知错误',
+        content: e.message || '云函数未接受调试身份，请重传 api',
         showCancel: false,
       });
       this.refreshDebugUi();

@@ -54,7 +54,12 @@
 
   <view class="footer">
     <button class="btn btn-ghost" bindtap="goTable">进入牌桌</button>
-    <button class="btn btn-primary" wx:if="{{isHost}}" loading="{{busy}}" bindtap="startHand">开一手</button>
+    <button
+      class="btn btn-primary"
+      wx:if="{{isHost && canStart}}"
+      loading="{{busy}}"
+      bindtap="startHand"
+    >开一手</button>
     <button class="btn btn-danger" bindtap="leave">离桌</button>
   </view>
 </view>

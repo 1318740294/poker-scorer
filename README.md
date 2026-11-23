@@ -91,7 +91,13 @@ node scripts/test-engine.js
 **合并本 PR / 拉最新 main 后，务必在微信开发者工具里重新「上传并部署：云端安装依赖」`login` 与 `api`。**  
 只编译前端、不重传云函数 → 候场会继续显示真实 openId（如 `oj0T8x…`），`dbg_*` 永远不会生效。
 
-成功标志：候场顶栏 / 「当前身份」必须是字面量 **`dbg_host`** 或 **`dbg_p2`**，**绝不是** `oj0…` 截断。
+成功标志（缺一不可）：
+
+- 顶栏黄条：**`调试身份: dbg_host`**（或 `dbg_p2`）
+- 候场：**`当前身份 · dbg_host`**
+- **绝不能**再出现：`真实 openId（调试已开）` / `oj0…` 截断
+
+旧房（多人同真实 openId 脏数据）请直接**新建房间**，不要继续用截图里的旧房号。
 
 ### 1. 先跑规则引擎（无需微信）
 
@@ -102,18 +108,18 @@ node scripts/test-openid.js
 
 ### 2. 最快路径：首页「本机双人自测」
 
-仓库默认带 `miniprogram/config.local.js`（`debug: true`），开发者工具里首页底部应出现 **调试 · 单人多身份**（不依赖 `envVersion === develop` 是否读到）。
+仓库默认带 `miniprogram/config.local.js`（`debug: true`），开发者工具里首页底部应出现 **调试 · 单人多身份**。
 
 1. **上传并部署** `login` + `api`（见上）。
-2. 编译运行 → 首页底部调试面板 → 点 **本机双人自测**（或先点 **开启**，会立刻切到 `dbg_host` 并持久化）。
-3. 自动完成：`dbg_host` 建房占座 0 → `dbg_p2` 加入占座 1 → 切回 `dbg_host` 进候场。
-4. **验收**：
-   - 顶栏亮黄条：`调试身份: dbg_host`
-   - 候场：`当前身份 · dbg_host`（不是 Host 昵称，也不是 oj0…）
-   - 人数 **2/9**，两个座位分别是 Host / 玩家2
-5. 若黄条出现「云端未采用 dbg」或弹窗提示 SOURCE：说明云函数仍是旧版，再传一次 `login`+`api`。
+2. （可选）云开发控制台 → 云函数 → `api` / `login` → 环境变量：可设 `ALLOW_DEBUG_OPENID=true`（**MVP 默认已放行 dbg_***，不设也能用；设上便于对照日志）。
+3. 编译运行 → 首页调试面板 → 点 **开启**（立刻切到 `dbg_host`）或直接 **本机双人自测**。
+4. 自测自动：`dbg_host` 建房占座 0 → `dbg_p2` 加入占座 1 → 切回 `dbg_host` 进候场。每步校验 `resolvedOpenId`/`me` 必须以 `dbg_` 开头，否则弹窗 **「云函数未接受调试身份，请重传 api」**，不会静默用真实 openId 占多席。
+5. **验收**：
+   - 顶栏：`调试身份: dbg_host`
+   - 候场：`当前身份 · dbg_host`，**2/9**，两席 Host / 玩家2
+   - 房主可见 **开一手**（`me === hostOpenId` 且入座 ≥ 2）
 
-未开调试就点「创建房间」会 toast 提醒先开调试或用一键自测。
+未开调试就点「创建房间」会 toast 提醒。调试开着时芯片只有 Host/玩家2/3/4，**没有「真实 openId」选项**（要回真实身份请点「关闭」）。
 
 ### 3. 手动切换身份（可选）
 
@@ -121,7 +127,12 @@ node scripts/test-openid.js
 2. 返回首页 → 点 **玩家2** → 同房号 **加入** → 点空位 → 确认 `当前身份 · dbg_p2`、**2/9**。
 3. 回首页切回 **Host** → 加入该房 → **开一手**。
 
-实现要点：客户端把 `debugOpenId=dbg_*` 传给云函数；云端对 `wx_client` / `wx_web` / `wx_api` 拒绝伪身份，其余来源（含 `wx_devtools`、空 SOURCE）放行。响应带 `data.me` + `data.debugMeta`（requested / resolved / source / debugApplied）。本地有 `dbg_*` 时 UI **不会**被真实 OPENID 覆盖。真机正式链路无法伪造；可用环境变量 `ALLOW_DEBUG_OPENID=1` 强制放行（仅开发环境）。
+实现要点（MVP）：
+
+- 客户端每次云调用带 `debugOpenId=dbg_*`；调试开着时本地永不回落真实 openId。
+- 云端：只要 `WXContext.OPENID` 存在且 `debugOpenId` 匹配 `/^dbg_/`，**一律采用伪身份**（私人 MVP；发版前关 `config.local.js`）。
+- 响应带 `me` + **`resolvedOpenId`** + `debugMeta`；前端断言二者等于期望 `dbg_*`。
+- 可选 env：`ALLOW_DEBUG_OPENID=true`（默认已放行；设 `0`/`false` 才收紧，一般不要）。
 
 发版前把 `config.local.js` 的 `debug` 改为 `false`（或删除该文件）。
 
@@ -134,7 +145,7 @@ node scripts/test-openid.js
 
 1. `node scripts/test-engine.js` 与 `node scripts/test-openid.js` 变绿  
 2. **重新上传** `login` + `api`  
-3. 点 **本机双人自测** → 看到 `当前身份 · dbg_host` 且 **2/9** → 开一手 
+3. 点 **本机双人自测** → 看到 `当前身份 · dbg_host` 且 **2/9** → **开一手**
 
 ## 许可
 

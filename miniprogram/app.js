@@ -53,15 +53,19 @@ App({
    */
   applyDebugIdentity(id, opts = {}) {
     if (!isDebugUiEnabled()) return Promise.resolve();
-    const next = id || '';
-    if (opts.turnOn || next) setDebugModeOn(true);
+    let next = id || '';
+    if (opts.turnOn || isDbgId(next)) setDebugModeOn(true);
     if (opts.turnOn === false && !next) setDebugModeOn(false);
+    // 调试开着时禁止落到空/真实 id —— 一律 dbg_*
+    if (opts.turnOn || getDebugOpenId() || isDbgId(next)) {
+      if (!isDbgId(next)) next = 'dbg_host';
+    }
     setDebugOpenId(next);
-    if (next) {
+    if (isDbgId(next)) {
       this.globalData.openId = next;
       this.globalData.debugMismatch = null;
     } else {
-      // 关闭伪身份：回到真实 openId（若已有）
+      // 仅关闭调试时回到真实 openId
       this.globalData.openId = this.globalData.realOpenId || '';
     }
     return this.ensureLogin();
@@ -128,17 +132,27 @@ App({
       });
       if (seq !== this._loginSeq) return; // 过期响应，勿覆盖新身份
       const payload = (res.result && res.result.data) || {};
-      const openId = payload.openId;
+      const openId = payload.resolvedOpenId || payload.openId || payload.me;
       if (payload.realOpenId) this.globalData.realOpenId = payload.realOpenId;
       this.syncIdentityFromServer(openId, payload.debugMeta || {
         requested: debugOpenId || null,
         resolved: openId,
+        resolvedOpenId: openId,
         realOpenId: payload.realOpenId || (isDbgId(openId) ? null : openId),
         source: payload.source || null,
         debugApplied: !!(debugOpenId && openId === debugOpenId),
       });
       // 兜底：调试开着时 effectiveOpenId 必须赢
       this.globalData.openId = effectiveOpenId(openId, this.globalData.openId);
+
+      // 请求了 dbg_* 但 login 仍返回真实 id → 大声记 mismatch（api 层也会再拦）
+      if (isDbgId(debugOpenId) && openId && openId !== debugOpenId) {
+        console.warn('[login] 云函数未接受调试身份，请重传 login', {
+          debugOpenId,
+          openId,
+          meta: payload.debugMeta,
+        });
+      }
     } catch (e) {
       console.warn('login cloud function failed', e);
       // login 失败也不丢掉本地 dbg_*
