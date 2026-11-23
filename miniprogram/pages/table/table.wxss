@@ -281,13 +281,19 @@
 }
 
 .mini {
-  padding: 10rpx 16rpx;
+  height: 56rpx;
+  min-height: 56rpx;
+  padding: 0 16rpx;
+  line-height: 56rpx;
   font-size: 22rpx;
 }
 
 .mini-input {
   width: 100rpx;
-  padding: 10rpx;
+  height: 56rpx;
+  min-height: 56rpx;
+  padding: 0 8rpx;
+  line-height: 56rpx;
   font-size: 22rpx;
   text-align: center;
 }

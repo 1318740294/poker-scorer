@@ -21,9 +21,23 @@ function genCode() {
   return s;
 }
 
-async function getOpenId() {
+/**
+ * 开发者工具单人多身份调试：仅允许 dbg_* 伪 openId，且仅开发者工具来源。
+ * 正式客户端 / 非 dbg_ 前缀一律用真实 OPENID。
+ */
+function getOpenId(event) {
   const wxContext = cloud.getWXContext();
-  return wxContext.OPENID;
+  const real = wxContext.OPENID;
+  const debug = event && event.debugOpenId;
+  if (
+    debug &&
+    typeof debug === 'string' &&
+    /^dbg_[a-z0-9_]{1,24}$/i.test(debug) &&
+    wxContext.SOURCE === 'wx_devtools'
+  ) {
+    return debug;
+  }
+  return real;
 }
 
 async function loadRoomById(roomId) {
@@ -61,7 +75,7 @@ async function createRoomDoc(room) {
 exports.main = async (event) => {
   const action = event.action || event.type;
   try {
-    const openId = await getOpenId();
+    const openId = getOpenId(event);
     switch (action) {
       case 'ping':
         return ok({ pong: true, openId, personas: PERSONAS });

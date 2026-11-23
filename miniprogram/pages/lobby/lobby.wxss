@@ -99,6 +99,11 @@
 
 .sm {
   flex: 1;
+  height: 72rpx;
+  min-height: 72rpx;
+  line-height: 72rpx;
+  padding: 0 16rpx;
+  font-size: 26rpx;
 }
 
 .slash {
@@ -106,7 +111,10 @@
 }
 
 .sm-btn {
-  padding: 16rpx 24rpx;
+  height: 72rpx;
+  min-height: 72rpx;
+  padding: 0 24rpx;
+  line-height: 72rpx;
   flex-shrink: 0;
 }
 

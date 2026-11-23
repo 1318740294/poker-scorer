@@ -29,6 +29,25 @@
     </view>
   </view>
 
+  <view class="debug-panel" wx:if="{{showDebug}}">
+    <view class="debug-head">
+      <text class="debug-title">调试 · 单人多身份</text>
+      <button class="btn btn-ghost debug-toggle" bindtap="toggleDebug">{{debugOn ? '关闭' : '开启'}}</button>
+    </view>
+    <view class="debug-body" wx:if="{{debugOn}}">
+      <view class="muted">开发者工具内切换伪 openId，再加入同一房号占多座。正式版不显示。</view>
+      <view class="debug-ids">
+        <view
+          wx:for="{{debugIds}}"
+          wx:key="id"
+          class="debug-chip {{debugOpenId === item.id ? 'on' : ''}}"
+          data-id="{{item.id}}"
+          bindtap="onPickDebugId"
+        >{{item.label}}</view>
+      </view>
+    </view>
+  </view>
+
   <view class="hint muted">
     5–12 人 · 自动盲注 · 边池自动拆 · 房主点赢家
   </view>

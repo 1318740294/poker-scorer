@@ -71,13 +71,77 @@
 .join-row {
   display: flex;
   gap: 16rpx;
-  align-items: center;
+  align-items: stretch;
+}
+
+.join-row .field,
+.join-row .btn {
+  height: 80rpx;
+  min-height: 80rpx;
+  line-height: 80rpx;
 }
 
 .code {
   flex: 1;
   letter-spacing: 4rpx;
   text-transform: uppercase;
+}
+
+.debug-panel {
+  margin-top: 40rpx;
+  padding: 24rpx;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1rpx dashed rgba(232, 197, 71, 0.35);
+  border-radius: 16rpx;
+}
+
+.debug-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.debug-title {
+  font-size: 24rpx;
+  color: var(--accent);
+}
+
+.debug-toggle {
+  padding: 0 20rpx;
+  height: 56rpx;
+  min-height: 56rpx;
+  line-height: 56rpx;
+  font-size: 22rpx;
+}
+
+.debug-body {
+  margin-top: 16rpx;
+}
+
+.debug-ids {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-top: 12rpx;
+}
+
+.debug-chip {
+  padding: 0 20rpx;
+  height: 56rpx;
+  min-height: 56rpx;
+  line-height: 56rpx;
+  font-size: 22rpx;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1rpx solid rgba(255, 255, 255, 0.14);
+  border-radius: 12rpx;
+}
+
+.debug-chip.on {
+  color: #1a1408;
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 .hint {

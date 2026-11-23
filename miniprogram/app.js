@@ -1,9 +1,12 @@
+const { getDebugOpenId, isDevelop } = require('./utils/debug');
+
 App({
   globalData: {
     openId: '',
     nickname: '',
     persona: 'fox',
     cloudReady: false,
+    isDevelop: false,
   },
 
   onLaunch() {
@@ -18,6 +21,7 @@ App({
       traceUser: true,
     });
     this.globalData.cloudReady = true;
+    this.globalData.isDevelop = isDevelop();
 
     const cached = wx.getStorageSync('profile') || {};
     this.globalData.nickname = cached.nickname || '';
@@ -28,12 +32,15 @@ App({
 
   async ensureLogin() {
     try {
+      const debugOpenId = getDebugOpenId();
+      const data = {
+        nickname: this.globalData.nickname,
+        persona: this.globalData.persona,
+      };
+      if (debugOpenId) data.debugOpenId = debugOpenId;
       const res = await wx.cloud.callFunction({
         name: 'login',
-        data: {
-          nickname: this.globalData.nickname,
-          persona: this.globalData.persona,
-        },
+        data,
       });
       const openId = res.result && res.result.data && res.result.data.openId;
       if (openId) this.globalData.openId = openId;
