@@ -37,7 +37,7 @@
       <button class="btn btn-ghost debug-toggle" bindtap="toggleDebug">{{debugOn ? '关闭' : '开启'}}</button>
     </view>
     <view class="debug-body" wx:if="{{debugOn}}">
-      <view class="muted">开启后顶栏显示「调试身份: dbg_xxx」。推荐点下方一键自测；或手动：Host 建房 → 回首页切玩家2 → 同房号加入占空位。</view>
+      <view class="muted">开启后顶栏必须是「调试身份: dbg_host」（或 dbg_p2）。绝不能是真实 openId。推荐「本机双人自测」；或手动：Host 建房 → 回首页切玩家2 → 同房号加入占空位。</view>
       <view class="debug-ids">
         <view
           wx:for="{{debugIds}}"

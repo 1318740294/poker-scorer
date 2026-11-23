@@ -36,17 +36,19 @@ function testSourceGates() {
   const ctxCloud = { OPENID: real, SOURCE: 'cloud' };
   const ctxWeird = { OPENID: real, SOURCE: 'something_new' };
 
+  // MVP：有 OPENID 一律允许（不再按 SOURCE 拒绝）
   assert(canUseDebugIdentity(ctxDev), 'devtools');
-  assert(!canUseDebugIdentity(ctxClient), 'block wx_client');
+  assert(canUseDebugIdentity(ctxClient), 'MVP: wx_client also allowed');
   assert(canUseDebugIdentity(ctxEmpty), 'empty SOURCE + OPENID');
   assert(canUseDebugIdentity(ctxMissing), 'missing SOURCE + OPENID');
   assert(!canUseDebugIdentity(ctxNoOpen), 'no OPENID');
-  assert(canUseDebugIdentity(ctxCloud), 'cloud SOURCE allowed (not production client)');
-  assert(canUseDebugIdentity(ctxWeird), 'unknown SOURCE allowed');
-  assert(canUseDebugIdentity(ctxClient, { allowDebugEnv: true }), 'env override');
-  assert(BLOCKED_SOURCES.has('wx_client'), 'wx_client blocked set');
-  assert(!BLOCKED_SOURCES.has('cloud'), 'cloud not in blocked set');
-  console.log('✓ source gates');
+  assert(canUseDebugIdentity(ctxCloud), 'cloud SOURCE');
+  assert(canUseDebugIdentity(ctxWeird), 'unknown SOURCE');
+  // 显式收紧时才拒生产客户端
+  assert(!canUseDebugIdentity(ctxClient, { allowDebugEnv: false }), 'tight mode blocks wx_client');
+  assert(canUseDebugIdentity(ctxDev, { allowDebugEnv: false }), 'tight mode still allows devtools');
+  assert(BLOCKED_SOURCES.has('wx_client'), 'wx_client still in set for tight mode');
+  console.log('✓ source gates (MVP accept-all)');
 }
 
 function testResolve() {
@@ -58,21 +60,21 @@ function testResolve() {
     'devtools accepts dbg'
   );
   assert(
-    resolveOpenId({ OPENID: real, SOURCE: 'wx_client' }, event) === real,
-    'client rejects dbg'
+    resolveOpenId({ OPENID: real, SOURCE: 'wx_client' }, event) === 'dbg_p2',
+    'MVP: wx_client accepts dbg'
   );
   assert(
     resolveOpenId({ OPENID: real }, event) === 'dbg_p2',
-    'missing SOURCE accepts dbg (DevTools quirk)'
+    'missing SOURCE accepts dbg'
   );
   assert(
     resolveOpenId({ OPENID: real, SOURCE: 'wx_devtools' }, { debugOpenId: 'evil' }) === real,
     'invalid prefix ignored'
   );
   assert(
-    resolveOpenId({ OPENID: real, SOURCE: 'wx_client' }, event, { allowDebugEnv: true }) ===
-      'dbg_p2',
-    'ALLOW_DEBUG_OPENID override'
+    resolveOpenId({ OPENID: real, SOURCE: 'wx_client' }, event, { allowDebugEnv: false }) ===
+      real,
+    'tight mode rejects on wx_client'
   );
   assert(resolveOpenId({ OPENID: real, SOURCE: 'wx_devtools' }, {}) === real, 'no debug field');
   assert(
@@ -91,16 +93,17 @@ function testDebugMeta() {
   assert(meta.debugApplied === true, 'meta applied');
   assert(meta.requested === 'dbg_host', 'meta requested');
   assert(meta.resolved === 'dbg_host', 'meta resolved');
+  assert(meta.resolvedOpenId === 'dbg_host', 'meta resolvedOpenId');
   assert(meta.realOpenId === real, 'meta real');
   assert(meta.source === 'wx_devtools', 'meta source');
 
-  const blocked = buildDebugMeta(
+  const clientOk = buildDebugMeta(
     { OPENID: real, SOURCE: 'wx_client' },
     event,
-    real
+    'dbg_host'
   );
-  assert(blocked.debugApplied === false, 'client meta not applied');
-  assert(blocked.allowed === false, 'client not allowed');
+  assert(clientOk.debugApplied === true, 'MVP client applied');
+  assert(clientOk.allowed === true, 'MVP client allowed');
   console.log('✓ buildDebugMeta');
 }
 

@@ -28,7 +28,28 @@ function emptySeat(seatIndex) {
   };
 }
 
+/**
+ * 清理同一 openId 占用的多余座位，只保留最先的一席。
+ * 用于修复历史脏数据 / 未鉴权空 openId 占多席。
+ */
+function dedupeSeatsByOpenId(room, openId) {
+  if (!openId || !room || !room.seats) return room;
+  let kept = false;
+  room.seats.forEach((seat) => {
+    if (!seat.seated || seat.openId !== openId) return;
+    if (!kept) {
+      kept = true;
+      return;
+    }
+    clearSeat(seat);
+  });
+  return room;
+}
+
 function createRoom({ hostOpenId, nickname, persona, config = {} }) {
+  if (!hostOpenId) {
+    throw new Error('无法识别房主身份');
+  }
   const maxSeats = clamp(
     config.maxSeats || DEFAULTS.defaultMaxSeats,
     DEFAULTS.minSeats,
@@ -121,6 +142,11 @@ function snapshotForUndo(room) {
 
 /** 入座 */
 function sitDown(room, { openId, nickname, persona, seatIndex, buyInBb }) {
+  if (!openId) {
+    throw new Error('无法识别身份，不能入座');
+  }
+  // 先清掉同 id 脏多席，再判断是否已坐
+  dedupeSeatsByOpenId(room, openId);
   if (seatOf(room, openId)) {
     throw new Error('你已入座');
   }
@@ -794,4 +820,5 @@ module.exports = {
   computeSidePots,
   snapshotForUndo,
   emptySeat,
+  dedupeSeatsByOpenId,
 };

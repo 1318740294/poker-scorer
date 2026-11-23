@@ -14,6 +14,7 @@ Page({
     identityText: '',
     mismatchText: '',
     isHost: false,
+    canStart: false,
     mySeat: null,
     seatedCount: 0,
     sb: '1',
@@ -121,12 +122,20 @@ Page({
     let identityText = identityLabel(openId);
     if (isDbgId(openId)) identityText = openId;
 
+    // 房主工具：me === hostOpenId；候场 status 为 lobby（方案里说的 waiting）
+    const isHost = !!openId && room.hostOpenId === openId;
+    const canStart =
+      isHost &&
+      (room.status === 'lobby' || room.status === 'waiting' || !room.hand) &&
+      seatedCount >= 2;
+
     this.setData({
       room,
       openId,
       identityText,
       mismatchText: this._mismatchLine(app),
-      isHost: room.hostOpenId === openId,
+      isHost,
+      canStart,
       mySeat,
       seatedCount,
       sb: String(room.config.sb),

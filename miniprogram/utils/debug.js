@@ -3,12 +3,12 @@
 const STORAGE_KEY = 'debugOpenId';
 const STORAGE_ON_KEY = 'debugModeOn';
 
+/** 调试开启后只允许 dbg_*；「真实 openId」通过关闭调试获得 */
 const IDS = [
   { id: 'dbg_host', label: 'Host' },
   { id: 'dbg_p2', label: '玩家2' },
   { id: 'dbg_p3', label: '玩家3' },
   { id: 'dbg_p4', label: '玩家4' },
-  { id: '', label: '真实 openId' },
 ];
 
 const NICK_MAP = {
@@ -17,6 +17,8 @@ const NICK_MAP = {
   dbg_p3: '玩家3',
   dbg_p4: '玩家4',
 };
+
+const DEFAULT_DBG = 'dbg_host';
 
 function readLocalConfig() {
   try {
@@ -72,30 +74,41 @@ function setDebugModeOn(on) {
   else wx.removeStorageSync(STORAGE_ON_KEY);
 }
 
+function isDbgId(id) {
+  return typeof id === 'string' && /^dbg_[a-z0-9_]{1,24}$/i.test(id);
+}
+
+/**
+ * 调试开着时必须返回合法 dbg_*；空/脏值自动回落 dbg_host 并写回 storage。
+ * 这样横幅永远不会出现「真实 openId（调试已开）」。
+ */
 function getDebugOpenId() {
   if (!isDebugUiEnabled()) return '';
   if (!isDebugModeOn()) return '';
-  return wx.getStorageSync(STORAGE_KEY) || '';
+  const raw = wx.getStorageSync(STORAGE_KEY) || '';
+  if (isDbgId(raw)) return raw;
+  // 调试开着却没有合法 id → 强制 dbg_host
+  wx.setStorageSync(STORAGE_KEY, DEFAULT_DBG);
+  return DEFAULT_DBG;
 }
 
 function setDebugOpenId(id) {
   if (!isDebugUiEnabled()) return;
-  const next = id || '';
-  if (next) wx.setStorageSync(STORAGE_KEY, next);
-  else wx.removeStorageSync(STORAGE_KEY);
+  if (isDbgId(id)) {
+    wx.setStorageSync(STORAGE_KEY, id);
+    return;
+  }
+  // 非 dbg：清空 storage（配合关闭调试）；调试仍开时 getDebugOpenId 会回落 dbg_host
+  wx.removeStorageSync(STORAGE_KEY);
 }
 
 /** 候场/首页展示用短标签 */
 function identityLabel(openId) {
   if (!openId) return '未登录';
-  if (NICK_MAP[openId]) return NICK_MAP[openId];
+  if (NICK_MAP[openId]) return openId; // 调试态展示字面 dbg_*，不用 Host 混淆
   if (String(openId).startsWith('dbg_')) return openId;
   if (openId.length <= 8) return openId;
   return `${openId.slice(0, 6)}…`;
-}
-
-function isDbgId(id) {
-  return typeof id === 'string' && /^dbg_[a-z0-9_]{1,24}$/i.test(id);
 }
 
 /**
@@ -118,9 +131,28 @@ function identityMismatch(serverMe) {
   return { local, server: serverMe };
 }
 
+/**
+ * 校验云端 resolvedOpenId / me 是否等于期望的 dbg_*。
+ * @returns {null|{ expected: string, got: string, meta?: object }}
+ */
+function assertResolvedDebugId(response, expectedDbg) {
+  if (!isDbgId(expectedDbg)) return null;
+  const got =
+    (response && (response.resolvedOpenId || response.me)) ||
+    (response && response.debugMeta && response.debugMeta.resolvedOpenId) ||
+    '';
+  if (got === expectedDbg) return null;
+  return {
+    expected: expectedDbg,
+    got: got || '(空)',
+    meta: (response && response.debugMeta) || null,
+  };
+}
+
 module.exports = {
   IDS,
   NICK_MAP,
+  DEFAULT_DBG,
   STORAGE_KEY,
   isDevelop,
   isDebugUiEnabled,
@@ -132,4 +164,5 @@ module.exports = {
   isDbgId,
   effectiveOpenId,
   identityMismatch,
+  assertResolvedDebugId,
 };

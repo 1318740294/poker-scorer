@@ -19,13 +19,14 @@ function genCode() {
 }
 
 /**
- * 开发者工具单人多身份：dbg_* 仅在非生产客户端来源下生效。
- * 详见 lib/openid.js（可单测）。
+ * MVP：合法 dbg_* + 已鉴权 OPENID → 一律采用伪身份。
+ * 详见 lib/openid.js。可选 env ALLOW_DEBUG_OPENID=true（默认已放行，设了便于对照）。
  */
 function resolveIdentity(event) {
   const wxContext = cloud.getWXContext();
-  const allowDebugEnv =
-    process.env.ALLOW_DEBUG_OPENID === '1' || process.env.ALLOW_DEBUG_OPENID === 'true';
+  // allowDebugEnv 默认 true；仅当显式设 ALLOW_DEBUG_OPENID=0/false 时收紧（一般勿用）
+  const env = process.env.ALLOW_DEBUG_OPENID;
+  const allowDebugEnv = !(env === '0' || env === 'false');
   const opts = { allowDebugEnv };
   const openId = resolveOpenId(wxContext, event, opts);
   const debugMeta = buildDebugMeta(wxContext, event, openId, opts);
@@ -34,7 +35,12 @@ function resolveIdentity(event) {
 
 function okWithMe(data, openId, debugMeta) {
   console.log('[api]', data && data._actionLog, 'me=', openId, 'applied=', debugMeta && debugMeta.debugApplied);
-  const out = { ...data, me: openId, debugMeta };
+  const out = {
+    ...data,
+    me: openId,
+    resolvedOpenId: openId,
+    debugMeta,
+  };
   delete out._actionLog;
   return { ok: true, data: out };
 }
@@ -77,6 +83,10 @@ exports.main = async (event) => {
     const { openId, debugMeta } = resolveIdentity(event);
     const ok = (data) => okWithMe({ ...data, _actionLog: action }, openId, debugMeta);
 
+    if (!openId && action !== 'ping') {
+      return fail('无法识别身份（无 OPENID），请确认已登录并重传 login', 'NO_OPENID');
+    }
+
     switch (action) {
       case 'ping':
         return ok({ pong: true, openId, personas: PERSONAS });
@@ -108,9 +118,12 @@ exports.main = async (event) => {
       }
 
       case 'sitDown': {
+        if (!openId) return fail('无法识别身份，请重试登录', 'NO_OPENID');
         const room = await loadRoomById(event.roomId);
         if (!room) return fail('房间不存在');
         if (room.status === 'playing') return fail('手牌进行中，请下一手再入座');
+        // 防御：清理同 openId 残留多席（历史脏数据 / 旧 bug）
+        engine.dedupeSeatsByOpenId(room, openId);
         engine.sitDown(room, {
           openId,
           nickname: event.nickname || '玩家',

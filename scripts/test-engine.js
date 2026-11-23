@@ -185,6 +185,40 @@ function testMultiIdentitySeats() {
   }
   assert(threw, 'same real openId cannot take two seats');
   assert(room2.seats.filter((s) => s.seated).length === 1, 'still one seat');
+
+  // 空 openId 禁止入座
+  threw = false;
+  try {
+    engine.sitDown(room2, {
+      openId: '',
+      nickname: 'Ghost',
+      persona: 'fox',
+      seatIndex: 1,
+      buyInBb: 50,
+    });
+  } catch (e) {
+    threw = /身份/.test(e.message);
+  }
+  assert(threw, 'empty openId rejected');
+
+  // 脏数据：同 openId 两席 → dedupe 只留一席
+  const dirty = engine.createRoom({
+    hostOpenId: 'oDUP',
+    nickname: 'A',
+    persona: 'fox',
+    config: { maxSeats: 6, defaultBuyInBb: 50 },
+  });
+  dirty.seats[1] = {
+    ...engine.emptySeat(1),
+    openId: 'oDUP',
+    nickname: 'A2',
+    persona: 'fox',
+    stack: 100,
+    seated: true,
+  };
+  assert(dirty.seats.filter((s) => s.seated && s.openId === 'oDUP').length === 2, 'setup dirty');
+  engine.dedupeSeatsByOpenId(dirty, 'oDUP');
+  assert(dirty.seats.filter((s) => s.seated && s.openId === 'oDUP').length === 1, 'deduped');
   console.log('✓ multi-identity seats');
 }
 

@@ -8,8 +8,9 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
  */
 exports.main = async (event) => {
   const wxContext = cloud.getWXContext();
-  const allowDebugEnv =
-    process.env.ALLOW_DEBUG_OPENID === '1' || process.env.ALLOW_DEBUG_OPENID === 'true';
+  // MVP：默认放行 dbg_*；仅 ALLOW_DEBUG_OPENID=0/false 时收紧
+  const env = process.env.ALLOW_DEBUG_OPENID;
+  const allowDebugEnv = !(env === '0' || env === 'false');
   const opts = { allowDebugEnv };
   const openId = resolveOpenId(wxContext, event, opts);
   const debugMeta = buildDebugMeta(wxContext, event, openId, opts);
@@ -46,6 +47,7 @@ exports.main = async (event) => {
     data: {
       openId,
       me: openId,
+      resolvedOpenId: openId,
       realOpenId: wxContext.OPENID || null,
       source: debugMeta.source,
       debug: String(openId || '').startsWith('dbg_'),

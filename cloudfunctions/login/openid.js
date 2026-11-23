@@ -1,5 +1,7 @@
 /**
  * 与 api/lib/openid.js 保持一致（云函数各自独立部署，需各带一份）。
+ *
+ * MVP：有 OPENID 即接受合法 dbg_*；不再按 SOURCE 拒绝。
  */
 
 const DBG_RE = /^dbg_[a-z0-9_]{1,24}$/i;
@@ -11,13 +13,13 @@ function isValidDebugOpenId(debug) {
 
 function canUseDebugIdentity(wxContext, opts = {}) {
   if (!wxContext || !wxContext.OPENID) return false;
-  if (opts.allowDebugEnv) return true;
-
-  const raw = wxContext.SOURCE;
-  const source = raw == null ? '' : String(raw).trim();
-
-  if (source === 'wx_devtools' || /devtools/i.test(source)) return true;
-  if (BLOCKED_SOURCES.has(source)) return false;
+  if (opts.allowDebugEnv === false) {
+    const raw = wxContext.SOURCE;
+    const source = raw == null ? '' : String(raw).trim();
+    if (source === 'wx_devtools' || /devtools/i.test(source)) return true;
+    if (BLOCKED_SOURCES.has(source)) return false;
+    return true;
+  }
   return true;
 }
 
@@ -37,10 +39,16 @@ function buildDebugMeta(wxContext, event, resolved, opts = {}) {
   return {
     requested: requested || null,
     resolved: resolved || null,
+    resolvedOpenId: resolved || null,
     realOpenId,
     source,
     allowed: canUseDebugIdentity(wxContext, opts),
-    debugApplied: !!(requested && resolved && requested === resolved),
+    debugApplied: !!(
+      requested &&
+      resolved &&
+      isValidDebugOpenId(requested) &&
+      requested === resolved
+    ),
   };
 }
 
