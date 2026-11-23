@@ -23,6 +23,13 @@
   margin-top: 8rpx;
 }
 
+.identity {
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  color: var(--accent);
+  letter-spacing: 1rpx;
+}
+
 .seat-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

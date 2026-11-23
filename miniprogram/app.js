@@ -1,4 +1,4 @@
-const { getDebugOpenId, isDevelop } = require('./utils/debug');
+const { getDebugOpenId, setDebugOpenId, isDevelop } = require('./utils/debug');
 
 App({
   globalData: {
@@ -8,6 +8,8 @@ App({
     cloudReady: false,
     isDevelop: false,
   },
+
+  _loginSeq: 0,
 
   onLaunch() {
     if (!wx.cloud) {
@@ -27,12 +29,33 @@ App({
     this.globalData.nickname = cached.nickname || '';
     this.globalData.persona = cached.persona || 'fox';
 
+    // 开发态：先同步本地调试身份，避免 lobby 仍用上一身份判断「已入座」
+    const debugOpenId = getDebugOpenId();
+    if (debugOpenId) this.globalData.openId = debugOpenId;
+
     this.ensureLogin();
   },
 
+  /**
+   * 切换调试身份：立刻写入 storage + globalData，再异步 login 校验。
+   * @param {string} id dbg_* 或空字符串（真实 openId）
+   */
+  applyDebugIdentity(id) {
+    if (!isDevelop()) return Promise.resolve();
+    const next = id || '';
+    setDebugOpenId(next);
+    if (next) this.globalData.openId = next;
+    else this.globalData.openId = '';
+    return this.ensureLogin();
+  },
+
   async ensureLogin() {
+    const seq = ++this._loginSeq;
     try {
       const debugOpenId = getDebugOpenId();
+      // 乐观更新，防止异步 login 返回前页面仍认为是旧 openId
+      if (debugOpenId) this.globalData.openId = debugOpenId;
+
       const data = {
         nickname: this.globalData.nickname,
         persona: this.globalData.persona,
@@ -42,6 +65,7 @@ App({
         name: 'login',
         data,
       });
+      if (seq !== this._loginSeq) return; // 过期响应，勿覆盖新身份
       const openId = res.result && res.result.data && res.result.data.openId;
       if (openId) this.globalData.openId = openId;
     } catch (e) {

@@ -1,6 +1,7 @@
 const cloud = require('wx-server-sdk');
 const engine = require('./lib/engine');
 const { PERSONAS } = require('./lib/constants');
+const { resolveOpenId } = require('./lib/openid');
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
@@ -22,22 +23,14 @@ function genCode() {
 }
 
 /**
- * 开发者工具单人多身份调试：仅允许 dbg_* 伪 openId，且仅开发者工具来源。
- * 正式客户端 / 非 dbg_ 前缀一律用真实 OPENID。
+ * 开发者工具单人多身份：dbg_* 仅在非生产客户端来源下生效。
+ * 详见 lib/openid.js（可单测）。
  */
 function getOpenId(event) {
   const wxContext = cloud.getWXContext();
-  const real = wxContext.OPENID;
-  const debug = event && event.debugOpenId;
-  if (
-    debug &&
-    typeof debug === 'string' &&
-    /^dbg_[a-z0-9_]{1,24}$/i.test(debug) &&
-    wxContext.SOURCE === 'wx_devtools'
-  ) {
-    return debug;
-  }
-  return real;
+  const allowDebugEnv =
+    process.env.ALLOW_DEBUG_OPENID === '1' || process.env.ALLOW_DEBUG_OPENID === 'true';
+  return resolveOpenId(wxContext, event, { allowDebugEnv });
 }
 
 async function loadRoomById(roomId) {
@@ -88,14 +81,14 @@ exports.main = async (event) => {
           config: event.config || {},
         });
         const saved = await createRoomDoc(room);
-        return ok({ room: saved });
+        return ok({ room: saved, me: openId });
       }
 
       case 'joinRoom': {
         const room = await loadRoomByCode(event.code);
         if (!room) return fail('房间不存在', 'NOT_FOUND');
-        // 仅返回房间；入座走 sitDown
-        return ok({ room });
+        // 仅返回房间；入座走 sitDown（附带 me 便于客户端同步当前身份）
+        return ok({ room, me: openId });
       }
 
       case 'getRoom': {
@@ -120,7 +113,7 @@ exports.main = async (event) => {
           buyInBb: event.buyInBb,
         });
         const saved = await saveRoom(room);
-        return ok({ room: saved });
+        return ok({ room: saved, me: openId });
       }
 
       case 'leave': {

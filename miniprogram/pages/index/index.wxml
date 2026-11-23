@@ -35,7 +35,7 @@
       <button class="btn btn-ghost debug-toggle" bindtap="toggleDebug">{{debugOn ? '关闭' : '开启'}}</button>
     </view>
     <view class="debug-body" wx:if="{{debugOn}}">
-      <view class="muted">开发者工具内切换伪 openId，再加入同一房号占多座。正式版不显示。</view>
+      <view class="muted">① Host 建房（自动占 0 座）→ 记房号 → 回首页 ② 选玩家2 → 同房号加入 → 点空位。改云函数后须重传 api/login。</view>
       <view class="debug-ids">
         <view
           wx:for="{{debugIds}}"

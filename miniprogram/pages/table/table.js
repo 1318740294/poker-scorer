@@ -6,6 +6,7 @@ const {
   streetLabel,
   countdownText,
 } = require('../../utils/format');
+const { getDebugOpenId, isDevelop } = require('../../utils/debug');
 
 /** 椭圆座位布局：百分比坐标（相对 felt-wrap） */
 function seatPositions(count) {
@@ -49,7 +50,9 @@ Page({
 
   onShow() {
     const app = getApp();
-    this.setData({ openId: app.globalData.openId || '' });
+    const openId =
+      (isDevelop() && getDebugOpenId()) || app.globalData.openId || '';
+    this.setData({ openId });
     this.watchRoom();
     this.startTicker();
   },
@@ -115,21 +118,25 @@ Page({
         },
         onError: () => {
           api.getRoom({ roomId }).then((d) => {
-            if (d.me) this.setData({ openId: d.me });
-            if (d.room) this.applyRoom(d.room, d.legal);
+            if (d.room) this.applyRoom(d.room, d.legal, d.me);
           });
         },
       });
 
     api.getRoom({ roomId }).then((d) => {
-      if (d.me) this.setData({ openId: d.me });
-      if (d.room) this.applyRoom(d.room, d.legal);
+      if (d.room) this.applyRoom(d.room, d.legal, d.me);
     });
   },
 
-  applyRoom(room, legalFromServer) {
+  applyRoom(room, legalFromServer, openIdOverride) {
     const app = getApp();
-    const openId = this.data.openId || app.globalData.openId;
+    const openId =
+      openIdOverride ||
+      this.data.openId ||
+      (isDevelop() && getDebugOpenId()) ||
+      app.globalData.openId ||
+      '';
+    if (openId) app.globalData.openId = openId;
     const bb = room.config.bb;
     const n = room.seats.length;
     const pos = seatPositions(n);

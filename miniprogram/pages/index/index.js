@@ -46,33 +46,33 @@ Page({
 
   toggleDebug() {
     if (!this.data.showDebug) return;
+    const app = getApp();
     const next = !this.data.debugOn;
     if (!next) {
-      debug.setDebugOpenId('');
+      app.applyDebugIdentity('');
       this.setData({ debugOn: false, debugOpenId: '' });
+      wx.showToast({ title: '已关闭调试身份', icon: 'none' });
     } else {
       const id = this.data.debugOpenId || 'dbg_host';
-      debug.setDebugOpenId(id);
-      this.setData({ debugOn: true, debugOpenId: id });
+      app.applyDebugIdentity(id);
+      const nick = debug.NICK_MAP[id];
+      this.setData({
+        debugOn: true,
+        debugOpenId: id,
+        nickname: nick || this.data.nickname,
+      });
+      wx.showToast({ title: `身份 ${id}`, icon: 'none' });
     }
-    getApp().ensureLogin();
   },
 
   onPickDebugId(e) {
     if (!this.data.showDebug || !this.data.debugOn) return;
     const id = e.currentTarget.dataset.id || '';
-    debug.setDebugOpenId(id);
-    this.setData({ debugOpenId: id });
-    const nickMap = {
-      dbg_host: 'Host',
-      dbg_p2: '玩家2',
-      dbg_p3: '玩家3',
-      dbg_p4: '玩家4',
-    };
-    if (id && nickMap[id]) {
-      this.setData({ nickname: nickMap[id] });
-    }
-    getApp().ensureLogin();
+    const app = getApp();
+    app.applyDebugIdentity(id);
+    const patch = { debugOpenId: id };
+    if (id && debug.NICK_MAP[id]) patch.nickname = debug.NICK_MAP[id];
+    this.setData(patch);
     wx.showToast({
       title: id ? `身份 ${id}` : '真实 openId',
       icon: 'none',
@@ -92,6 +92,10 @@ Page({
     const profile = this.persistProfile();
     this.setData({ busy: true });
     try {
+      // 确保调试身份已写入后再建房，避免房主座位落到真实 openId
+      if (this.data.debugOn) {
+        await getApp().applyDebugIdentity(this.data.debugOpenId || 'dbg_host');
+      }
       const { room } = await api.createRoom({
         nickname: profile.nickname,
         persona: profile.persona,
@@ -102,6 +106,7 @@ Page({
           defaultBuyInBb: 100,
         },
       });
+      // createRoom 会自动把当前身份坐到 0 号位
       wx.navigateTo({
         url: `/pages/lobby/lobby?roomId=${room._id}`,
       });
@@ -122,9 +127,13 @@ Page({
     this.persistProfile();
     this.setData({ busy: true });
     try {
-      const { room } = await api.joinRoom({ code });
+      if (this.data.debugOn) {
+        await getApp().applyDebugIdentity(this.data.debugOpenId || '');
+      }
+      const data = await api.joinRoom({ code });
+      if (data.me) getApp().globalData.openId = data.me;
       wx.navigateTo({
-        url: `/pages/lobby/lobby?roomId=${room._id}`,
+        url: `/pages/lobby/lobby?roomId=${data.room._id}`,
       });
     } catch (e) {
       wx.showToast({ title: e.message || '加入失败', icon: 'none' });

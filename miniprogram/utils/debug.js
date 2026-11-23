@@ -9,6 +9,13 @@ const IDS = [
   { id: 'dbg_p4', label: '玩家4' },
 ];
 
+const NICK_MAP = {
+  dbg_host: 'Host',
+  dbg_p2: '玩家2',
+  dbg_p3: '玩家3',
+  dbg_p4: '玩家4',
+};
+
 function isDevelop() {
   try {
     const info = wx.getAccountInfoSync();
@@ -30,9 +37,20 @@ function setDebugOpenId(id) {
   else wx.removeStorageSync(STORAGE_KEY);
 }
 
+/** 候场/首页展示用短标签 */
+function identityLabel(openId) {
+  if (!openId) return '未登录';
+  if (NICK_MAP[openId]) return NICK_MAP[openId];
+  if (String(openId).startsWith('dbg_')) return openId;
+  if (openId.length <= 8) return openId;
+  return `${openId.slice(0, 6)}…`;
+}
+
 module.exports = {
   IDS,
+  NICK_MAP,
   isDevelop,
   getDebugOpenId,
   setDebugOpenId,
+  identityLabel,
 };
