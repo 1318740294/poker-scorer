@@ -32,6 +32,7 @@ cloudfunctions/
 database/schema.md
 scripts/test-engine.js
 scripts/test-openid.js
+scripts/test-room-update.js  # saveRoom 对 null hand 用 _.set
 ```
 
 ## 在微信开发者工具中打开
@@ -98,6 +99,7 @@ node scripts/test-engine.js
 ```bash
 node scripts/test-engine.js
 node scripts/test-openid.js
+node scripts/test-room-update.js
 ```
 
 ### 2. 最快路径：首页「本机双人自测」
@@ -132,9 +134,9 @@ node scripts/test-openid.js
 
 ### 5. 建议最小联调路径
 
-1. `node scripts/test-engine.js` 与 `node scripts/test-openid.js` 变绿  
-2. **重新上传** `login` + `api`  
-3. 点 **本机双人自测** → 看到 `当前身份 · dbg_host` 且 **2/9** → 开一手 
+1. `node scripts/test-engine.js` / `test-openid.js` / `test-room-update.js` 变绿  
+2. **重新上传** `api`（本修复只改云函数 `api`；若身份仍异常再传 `login`）  
+3. 点 **本机双人自测** → 看到 `当前身份 · dbg_host` → **开一手** 应跳转牌桌（不再 -502001）
 
 ## 许可
 
