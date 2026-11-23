@@ -1,15 +1,11 @@
 const cloud = require('wx-server-sdk');
 const engine = require('./lib/engine');
 const { PERSONAS } = require('./lib/constants');
-const { resolveOpenId } = require('./lib/openid');
+const { resolveOpenId, buildDebugMeta } = require('./lib/openid');
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
-
-function ok(data) {
-  return { ok: true, data };
-}
 
 function fail(message, code = 'ERR') {
   return { ok: false, code, message };
@@ -26,11 +22,21 @@ function genCode() {
  * 开发者工具单人多身份：dbg_* 仅在非生产客户端来源下生效。
  * 详见 lib/openid.js（可单测）。
  */
-function getOpenId(event) {
+function resolveIdentity(event) {
   const wxContext = cloud.getWXContext();
   const allowDebugEnv =
     process.env.ALLOW_DEBUG_OPENID === '1' || process.env.ALLOW_DEBUG_OPENID === 'true';
-  return resolveOpenId(wxContext, event, { allowDebugEnv });
+  const opts = { allowDebugEnv };
+  const openId = resolveOpenId(wxContext, event, opts);
+  const debugMeta = buildDebugMeta(wxContext, event, openId, opts);
+  return { openId, debugMeta, wxContext };
+}
+
+function okWithMe(data, openId, debugMeta) {
+  console.log('[api]', data && data._actionLog, 'me=', openId, 'applied=', debugMeta && debugMeta.debugApplied);
+  const out = { ...data, me: openId, debugMeta };
+  delete out._actionLog;
+  return { ok: true, data: out };
 }
 
 async function loadRoomById(roomId) {
@@ -68,7 +74,9 @@ async function createRoomDoc(room) {
 exports.main = async (event) => {
   const action = event.action || event.type;
   try {
-    const openId = getOpenId(event);
+    const { openId, debugMeta } = resolveIdentity(event);
+    const ok = (data) => okWithMe({ ...data, _actionLog: action }, openId, debugMeta);
+
     switch (action) {
       case 'ping':
         return ok({ pong: true, openId, personas: PERSONAS });
@@ -81,14 +89,13 @@ exports.main = async (event) => {
           config: event.config || {},
         });
         const saved = await createRoomDoc(room);
-        return ok({ room: saved, me: openId });
+        return ok({ room: saved });
       }
 
       case 'joinRoom': {
         const room = await loadRoomByCode(event.code);
         if (!room) return fail('房间不存在', 'NOT_FOUND');
-        // 仅返回房间；入座走 sitDown（附带 me 便于客户端同步当前身份）
-        return ok({ room, me: openId });
+        return ok({ room });
       }
 
       case 'getRoom': {
@@ -97,7 +104,6 @@ exports.main = async (event) => {
         return ok({
           room,
           legal: engine.getLegalActions(room, openId),
-          me: openId,
         });
       }
 
@@ -113,7 +119,7 @@ exports.main = async (event) => {
           buyInBb: event.buyInBb,
         });
         const saved = await saveRoom(room);
-        return ok({ room: saved, me: openId });
+        return ok({ room: saved });
       }
 
       case 'leave': {

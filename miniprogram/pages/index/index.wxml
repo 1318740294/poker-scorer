@@ -1,4 +1,6 @@
 <view class="page">
+  <debug-banner id="dbgBanner" />
+
   <view class="hero">
     <view class="brand">德州记分桌</view>
     <view class="tagline">现金局共享桌 · 无牌面纯记分</view>
@@ -35,7 +37,7 @@
       <button class="btn btn-ghost debug-toggle" bindtap="toggleDebug">{{debugOn ? '关闭' : '开启'}}</button>
     </view>
     <view class="debug-body" wx:if="{{debugOn}}">
-      <view class="muted">① Host 建房（自动占 0 座）→ 记房号 → 回首页 ② 选玩家2 → 同房号加入 → 点空位。改云函数后须重传 api/login。</view>
+      <view class="muted">开启后顶栏显示「调试身份: dbg_xxx」。推荐点下方一键自测；或手动：Host 建房 → 回首页切玩家2 → 同房号加入占空位。</view>
       <view class="debug-ids">
         <view
           wx:for="{{debugIds}}"
@@ -45,6 +47,12 @@
           bindtap="onPickDebugId"
         >{{item.label}}</view>
       </view>
+      <button
+        class="btn btn-primary block dual-btn"
+        loading="{{busy}}"
+        bindtap="onDualSelfTest"
+      >本机双人自测</button>
+      <view class="mismatch" wx:if="{{mismatchText}}">{{mismatchText}}</view>
     </view>
   </view>
 

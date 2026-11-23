@@ -1,5 +1,5 @@
 const cloud = require('wx-server-sdk');
-const { resolveOpenId } = require('./openid');
+const { resolveOpenId, buildDebugMeta } = require('./openid');
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
@@ -10,7 +10,9 @@ exports.main = async (event) => {
   const wxContext = cloud.getWXContext();
   const allowDebugEnv =
     process.env.ALLOW_DEBUG_OPENID === '1' || process.env.ALLOW_DEBUG_OPENID === 'true';
-  const openId = resolveOpenId(wxContext, event, { allowDebugEnv });
+  const opts = { allowDebugEnv };
+  const openId = resolveOpenId(wxContext, event, opts);
+  const debugMeta = buildDebugMeta(wxContext, event, openId, opts);
   const db = cloud.database();
 
   const nickname = event.nickname;
@@ -37,13 +39,19 @@ exports.main = async (event) => {
     }
   }
 
+  console.log('[login] openId=', openId, 'meta=', JSON.stringify(debugMeta));
+
   return {
     ok: true,
     data: {
       openId,
+      me: openId,
+      realOpenId: wxContext.OPENID || null,
+      source: debugMeta.source,
+      debug: String(openId || '').startsWith('dbg_'),
+      debugMeta,
       appId: wxContext.APPID,
       unionId: wxContext.UNIONID || null,
-      debug: String(openId || '').startsWith('dbg_'),
     },
   };
 };

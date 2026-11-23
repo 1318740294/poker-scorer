@@ -1,4 +1,6 @@
 <view class="page" wx:if="{{room}}">
+  <debug-banner id="dbgBanner" />
+
   <view class="header">
     <view class="code-wrap">
       <text class="muted">房号</text>
@@ -6,6 +8,7 @@
     </view>
     <view class="meta muted">{{seatedCount}}/{{room.config.maxSeats}} 人 · 盲注 {{room.config.sb}}/{{room.config.bb}}</view>
     <view class="identity" wx:if="{{identityText}}">当前身份 · {{identityText}}</view>
+    <view class="identity-warn" wx:if="{{mismatchText}}">{{mismatchText}}</view>
   </view>
 
   <view class="seat-grid">

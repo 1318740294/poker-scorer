@@ -144,6 +144,21 @@
   border-color: var(--accent);
 }
 
+.dual-btn {
+  margin-top: 24rpx;
+}
+
+.mismatch {
+  margin-top: 16rpx;
+  padding: 12rpx 16rpx;
+  font-size: 22rpx;
+  line-height: 1.45;
+  color: #1a1400;
+  background: #ffe600;
+  border: 2rpx solid #ff3b30;
+  border-radius: 8rpx;
+}
+
 .hint {
   margin-top: 48rpx;
   text-align: center;

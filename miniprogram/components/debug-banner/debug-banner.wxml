@@ -1,0 +1,4 @@
+<view class="dbg-banner" wx:if="{{visible}}">
+  <text class="dbg-text">调试身份: {{label}}</text>
+  <text class="dbg-warn" wx:if="{{mismatch}}">⚠ 云端未采用 dbg（请重传 login+api）</text>
+</view>

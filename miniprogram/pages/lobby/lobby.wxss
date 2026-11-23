@@ -25,9 +25,18 @@
 
 .identity {
   margin-top: 12rpx;
-  font-size: 24rpx;
-  color: var(--accent);
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #ffe600;
   letter-spacing: 1rpx;
+  text-shadow: 0 0 8rpx rgba(0, 0, 0, 0.6);
+}
+
+.identity-warn {
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: #ff3b30;
+  font-weight: 600;
 }
 
 .seat-grid {
