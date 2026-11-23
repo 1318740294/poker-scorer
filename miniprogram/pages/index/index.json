@@ -1,4 +1,6 @@
 {
   "navigationBarTitleText": "德州记分桌",
-  "usingComponents": {}
+  "usingComponents": {
+    "debug-banner": "/components/debug-banner/debug-banner"
+  }
 }

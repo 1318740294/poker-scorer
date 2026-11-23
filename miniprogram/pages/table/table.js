@@ -6,7 +6,7 @@ const {
   streetLabel,
   countdownText,
 } = require('../../utils/format');
-const { getDebugOpenId, isDevelop } = require('../../utils/debug');
+const { effectiveOpenId } = require('../../utils/debug');
 
 /** 椭圆座位布局：百分比坐标（相对 felt-wrap） */
 function seatPositions(count) {
@@ -50,11 +50,12 @@ Page({
 
   onShow() {
     const app = getApp();
-    const openId =
-      (isDevelop() && getDebugOpenId()) || app.globalData.openId || '';
+    const openId = effectiveOpenId(null, app.globalData.openId);
     this.setData({ openId });
     this.watchRoom();
     this.startTicker();
+    const banner = this.selectComponent('#dbgBanner');
+    if (banner && banner.refresh) banner.refresh();
   },
 
   onUnload() {
@@ -128,14 +129,12 @@ Page({
     });
   },
 
-  applyRoom(room, legalFromServer, openIdOverride) {
+  applyRoom(room, legalFromServer, serverMe) {
     const app = getApp();
-    const openId =
-      openIdOverride ||
-      this.data.openId ||
-      (isDevelop() && getDebugOpenId()) ||
-      app.globalData.openId ||
-      '';
+    const openId = effectiveOpenId(
+      serverMe,
+      this.data.openId || app.globalData.openId
+    );
     if (openId) app.globalData.openId = openId;
     const bb = room.config.bb;
     const n = room.seats.length;

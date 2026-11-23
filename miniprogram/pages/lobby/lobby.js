@@ -1,6 +1,10 @@
 const api = require('../../utils/api');
 const { PERSONA_LABEL, PERSONA_COLOR, stackBb } = require('../../utils/format');
-const { identityLabel, getDebugOpenId, isDevelop } = require('../../utils/debug');
+const {
+  identityLabel,
+  effectiveOpenId,
+  isDbgId,
+} = require('../../utils/debug');
 
 Page({
   data: {
@@ -8,6 +12,7 @@ Page({
     room: null,
     openId: '',
     identityText: '',
+    mismatchText: '',
     isHost: false,
     mySeat: null,
     seatedCount: 0,
@@ -28,14 +33,22 @@ Page({
 
   onShow() {
     const app = getApp();
-    // 优先调试身份 / 全局 openId，避免仍显示上一身份为「我」
-    const openId =
-      (isDevelop() && getDebugOpenId()) || app.globalData.openId || '';
+    // 本地 dbg_* 优先，绝不被云端真实 OPENID 盖掉
+    const openId = effectiveOpenId(null, app.globalData.openId);
     this.setData({
       openId,
       identityText: identityLabel(openId),
+      mismatchText: this._mismatchLine(app),
     });
     this.watchRoom();
+    const banner = this.selectComponent('#dbgBanner');
+    if (banner && banner.refresh) banner.refresh();
+  },
+
+  _mismatchLine(app) {
+    const m = app && app.globalData && app.globalData.debugMismatch;
+    if (!m) return '';
+    return `⚠ 云端 me=${identityLabel(m.server)} ≠ 本地 ${m.local}（请重传 login+api）`;
   },
 
   onUnload() {
@@ -89,16 +102,11 @@ Page({
 
   /**
    * @param {object} room
-   * @param {string} [openIdOverride] 必须传入 getRoom 返回的 me，避免 setData 异步导致仍用旧 openId
+   * @param {string} [serverMe] getRoom 返回的 me；若本地有 dbg_* 则忽略非 dbg 的 serverMe
    */
-  applyRoom(room, openIdOverride) {
+  applyRoom(room, serverMe) {
     const app = getApp();
-    const openId =
-      openIdOverride ||
-      this.data.openId ||
-      (isDevelop() && getDebugOpenId()) ||
-      app.globalData.openId ||
-      '';
+    const openId = effectiveOpenId(serverMe, this.data.openId || app.globalData.openId);
     if (openId) app.globalData.openId = openId;
 
     const bb = room.config.bb;
@@ -108,10 +116,16 @@ Page({
     }));
     const mySeat = room.seats.find((s) => s.openId === openId && s.seated) || null;
     const seatedCount = room.seats.filter((s) => s.seated).length;
+
+    // 展示名：调试开着时强制显示 dbg_* 字面，不用「Host」混淆
+    let identityText = identityLabel(openId);
+    if (isDbgId(openId)) identityText = openId;
+
     this.setData({
       room,
       openId,
-      identityText: identityLabel(openId),
+      identityText,
+      mismatchText: this._mismatchLine(app),
       isHost: room.hostOpenId === openId,
       mySeat,
       seatedCount,
@@ -120,6 +134,9 @@ Page({
       buyInBb: String(room.config.defaultBuyInBb),
       rebuyBb: mySeat ? String(Math.round(mySeat.stack / bb)) : String(room.config.defaultBuyInBb),
     });
+
+    const banner = this.selectComponent('#dbgBanner');
+    if (banner && banner.refresh) banner.refresh();
   },
 
   copyCode() {
@@ -160,8 +177,7 @@ Page({
       return;
     }
     const app = getApp();
-    const expectedId =
-      (isDevelop() && getDebugOpenId()) || app.globalData.openId || this.data.openId;
+    const expectedId = effectiveOpenId(null, app.globalData.openId || this.data.openId);
     try {
       const data = await api.sitDown({
         roomId: this.data.roomId,
@@ -170,11 +186,11 @@ Page({
         persona: app.globalData.persona || 'fox',
         buyInBb: Number(this.data.buyInBb) || 100,
       });
-      const me = data.me || expectedId;
-      if (me) app.globalData.openId = me;
-      if (data.room) this.applyRoom(data.room, me);
+      const me = effectiveOpenId(data.me, expectedId);
+      if (data.room) this.applyRoom(data.room, data.me);
+      const label = isDbgId(me) ? me : identityLabel(me);
       wx.showToast({
-        title: `已入座 · ${identityLabel(me)}`,
+        title: `已入座 · ${label}`,
         icon: 'none',
       });
     } catch (err) {

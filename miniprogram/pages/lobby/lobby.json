@@ -1,4 +1,6 @@
 {
   "navigationBarTitleText": "候场",
-  "usingComponents": {}
+  "usingComponents": {
+    "debug-banner": "/components/debug-banner/debug-banner"
+  }
 }
